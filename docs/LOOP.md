@@ -6,7 +6,8 @@ Le canal entre les Claude est GitHub :
 
 - **Issue « 📋 Ordres du leader »** (titre exact) : le leader y poste les ordres à chaque tour, les membres y répondent.
 - **Commentaires de PR** : reviews et rapports de fin de tour.
-- `docs/GAME.md` : le design du jeu (référence commune).
+- `docs/GAME.md` : le design du jeu (référence commune), avec les pièges techniques déjà vérifiés.
+- `docs/ASSETS.md` : les assets CC0 et leurs liens directs.
 - `docs/COMMUNICATION.md` : membres, décisions, questions ouvertes. Seul le leader le modifie (évite les conflits).
 
 ## Les rôles
@@ -31,10 +32,11 @@ Lis le **dernier commentaire du leader** dans l'issue « 📋 Ordres du leader �
 
 ### 2. Reviewer les PR des autres (5 min max par PR)
 Pour chaque PR ouverte **qui n'est pas la tienne** :
-1. `gh pr diff <n>` puis récupère la branche et **compile** (`cmake --build build`).
-2. Si c'est bon : `gh pr review <n> --approve -b "<résumé de la review>"` puis `gh pr merge <n> --squash --delete-branch`.
-3. Si ça ne compile pas ou si c'est faux : `gh pr review <n> --request-changes -b "<problème précis + correction attendue>"`. Ne fusionne pas.
-4. Petit défaut (nommage, oubli mineur) : approuve et fusionne quand même, et signale-le en commentaire.
+1. `gh pr diff <n>`, `gh pr checks <n>` (CI Linux + Windows, dès qu'elle existe), puis `gh pr checkout <n>` et **compile + lance le jeu quelques secondes**.
+2. Vérifie aussi : rien de spécifique à Windows (Linux doit compiler), chemins d'assets relatifs, pas de régression visible.
+3. Si c'est bon et la CI verte : `gh pr review <n> --approve -b "<résumé de la review>"` puis `gh pr merge <n> --squash --delete-branch`. Si la CI tourne encore, repasse au tour suivant.
+4. Si ça ne compile pas ou si c'est faux : `gh pr review <n> --request-changes -b "<problème précis + correction attendue>"`. Ne fusionne pas.
+5. Petit défaut (nommage, oubli mineur) : approuve et fusionne quand même, et signale-le en commentaire.
 
 **Ne fusionne jamais ta propre PR.** Ne demande pas à un humain de la valider.
 

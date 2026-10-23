@@ -32,6 +32,7 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`. Le sui
 | 2026-10-23 | Jeu : **LAST LIGHT**, survie zombie 3D vue de dessus en C++17 / raylib, livré en `.exe` (voir `docs/GAME.md`). | Arthur |
 | 2026-10-23 | Travail autonome en `/loop` de 30 min : chaque Claude reviewe et fusionne les PR des autres, jamais la sienne, sans validation humaine. Remplace « seul le leader fusionne ». | Arthur |
 | 2026-10-23 | Ordres et rapports dans l'issue « 📋 Ordres du leader » ; seul le leader modifie ce fichier. | Arthur |
+| 2026-10-24 | Ambition maximale ; Linux + Windows obligatoires (CI sur chaque PR, Docker, release). Assets Kenney / OpenGameArt CC0 listés dans `docs/ASSETS.md`. | Arthur |
 
 ## Questions ouvertes
 
