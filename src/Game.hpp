@@ -1,9 +1,11 @@
 #pragma once
 
+#include "core/AnimatedModel.hpp"
 #include "game/CameraRig.hpp"
 #include "game/Player.hpp"
 #include "game/World.hpp"
 
+#include <memory>
 #include <string>
 
 // Machine à états du jeu : possède la fenêtre et tous les systèmes.
@@ -29,11 +31,15 @@ private:
     void drawMenu() const;
     void drawPauseOverlay() const;
     void startNewGame();
+    // Point du sol (y = 0) sous le curseur de la souris.
+    Vector3 mouseGroundPoint() const;
 
     Options options_;
     int frameCount_ = 0;
     State state_ = State::Menu;
     World world_;
-    Player player_;
+    // Les ressources doivent être créées après InitWindow (contexte OpenGL).
+    std::unique_ptr<AnimatedModel> keeperModel_;
+    std::unique_ptr<Player> player_;
     CameraRig cameraRig_;
 };

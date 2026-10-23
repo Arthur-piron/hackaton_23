@@ -1,6 +1,10 @@
 #include "Game.hpp"
 
+#include "core/AssetPath.hpp"
 #include "raylib.h"
+#include "raymath.h"
+
+#include <cmath>
 
 namespace {
 constexpr int kScreenWidth = 1280;
@@ -19,12 +23,18 @@ Game::Game(const Options& options)
     InitAudioDevice();
     SetTargetFPS(kTargetFps);
     SetExitKey(KEY_NULL); // Échap sert à la pause, pas à quitter.
+
+    keeperModel_ = std::make_unique<AnimatedModel>(assetPath("models/graveyard/character-keeper.glb"));
+    player_ = std::make_unique<Player>(*keeperModel_);
     startNewGame();
     if (options_.smokeFrames > 0) state_ = State::Playing;
 }
 
 Game::~Game()
 {
+    // Les ressources GPU doivent être libérées avant la fermeture de la fenêtre.
+    player_.reset();
+    keeperModel_.reset();
     CloseAudioDevice();
     CloseWindow();
 }
@@ -46,8 +56,16 @@ void Game::run()
 
 void Game::startNewGame()
 {
-    player_.reset({0.0f, 0.0f, 0.0f});
-    cameraRig_.snapTo(player_.position());
+    player_->reset({0.0f, 0.0f, 0.0f});
+    cameraRig_.snapTo(player_->position());
+}
+
+Vector3 Game::mouseGroundPoint() const
+{
+    const Ray ray = GetScreenToWorldRay(GetMousePosition(), cameraRig_.camera());
+    if (std::fabs(ray.direction.y) < 1e-4f) return player_->position();
+    const float t = -ray.position.y / ray.direction.y;
+    return {ray.position.x + ray.direction.x * t, 0.0f, ray.position.z + ray.direction.z * t};
 }
 
 void Game::update(float dt)
@@ -64,8 +82,8 @@ void Game::update(float dt)
             state_ = State::Paused;
             break;
         }
-        player_.update(dt, world_);
-        cameraRig_.update(dt, player_.position());
+        player_->update(dt, world_, mouseGroundPoint());
+        cameraRig_.update(dt, player_->position());
         break;
     case State::Paused:
         if (IsKeyPressed(KEY_ESCAPE)) state_ = State::Playing;
@@ -88,7 +106,9 @@ void Game::draw() const
     } else {
         BeginMode3D(cameraRig_.camera());
         world_.draw();
-        player_.draw();
+        player_->draw();
+        DrawCircle3D(Vector3Add(mouseGroundPoint(), {0.0f, 0.02f, 0.0f}), 0.25f, {1.0f, 0.0f, 0.0f}, 90.0f,
+                     {255, 220, 120, 160});
         EndMode3D();
 
         if (state_ == State::Paused) drawPauseOverlay();
