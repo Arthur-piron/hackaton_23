@@ -2,6 +2,7 @@
 
 #include "raylib.h"
 
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,12 @@ struct AnimationState {
     float previousTime = 0.0f;
     float blend = 1.0f;     // 0 = previousClip, 1 = clip
     float blendDuration = 0.15f;
+
+    // Couche partielle : remplace la pose de certains nœuds (ex. bras qui tient
+    // une arme pendant que les jambes marchent). overlayMask : bit n = nœud n.
+    int overlayClip = -1;
+    float overlayTime = 0.0f;
+    unsigned overlayMask = 0;
 };
 
 // Modèle GLB animé par nœuds (personnages Kenney : chaque membre est un nœud rigide).
@@ -43,8 +50,15 @@ public:
     // Vrai quand une animation non bouclée est arrivée au bout.
     bool isFinished(const AnimationState& state) const;
 
+    // Indice d'un nœud par son nom (« arm-right »...), -1 si absent.
+    int findNode(const std::string& name) const;
+    // Masque de couche partielle à partir de noms de nœuds.
+    unsigned nodeMask(std::initializer_list<const char*> names) const;
+
     // Dessine le modèle dans la pose de l'état, avec une transformation monde.
     void draw(const AnimationState& state, const Matrix& transform, Color tint = WHITE) const;
+    // Transformation monde d'un nœud dans la pose de l'état (pour attacher une arme).
+    Matrix nodeTransform(const AnimationState& state, int node, const Matrix& transform) const;
 
     // Accès aux matériaux, par exemple pour leur affecter un shader d'éclairage.
     Model& model() { return model_; }
@@ -74,8 +88,12 @@ private:
 
     void samplePose(int clip, float time, std::vector<NodePose>& pose) const;
     void computeWorld(const std::vector<NodePose>& pose, std::vector<Matrix>& world) const;
+    // Calcule scratchWorld_ pour l'état donné (pose, fondu, couche partielle).
+    void evaluate(const AnimationState& state) const;
+    float wrappedTime(int clip, float time, bool loop) const;
 
     Model model_{};
+    std::vector<std::string> nodeNames_;
     std::vector<int> parents_;          // parent de chaque nœud (-1 : racine)
     std::vector<int> order_;            // nœuds triés parents d'abord
     std::vector<NodePose> basePose_;    // pose de repos de chaque nœud
