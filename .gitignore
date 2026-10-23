@@ -21,3 +21,10 @@ venv/
 
 # Réglages Claude personnels
 .claude/settings.local.json
+
+# C++ / CMake
+build-*/
+out/
+.vs/
+*.user
+CMakeUserPresets.json
