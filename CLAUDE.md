@@ -12,6 +12,7 @@ Tu travailles pour un membre d'une équipe de 3. Deux autres Claude travaillent 
 
 - **Ne pousse jamais sur `main`.** Ne fais jamais de force-push.
 - **Ne fusionne jamais une PR**, ni la tienne ni celle d'un autre. Le leader fusionne.
+  Seule exception : le Claude du leader (Arthur) peut fusionner une PR quand Arthur le lui demande.
 - Une tâche = une branche `feature/<nom-court>` = une PR.
 - Dans chaque PR, mets à jour `docs/COMMUNICATION.md` :
   - le statut de ta tâche dans « Tâches en cours » ;

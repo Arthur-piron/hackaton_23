@@ -7,7 +7,7 @@ Projet d'équipe à 3. Chaque membre travaille avec son propre Claude (Claude Co
 1. **Personne ne pousse sur `main`.** `main` est protégée : PR obligatoire et approbation du leader requise.
 2. **Une tâche = une branche `feature/<nom>` = une PR.**
 3. **Chaque PR met à jour `docs/COMMUNICATION.md`** : statut de la tâche et une ligne dans le journal.
-4. **Seul le leader fusionne.** Aucun membre, et aucun Claude, ne fusionne sa propre PR.
+4. **Seul le leader fusionne.** Aucun membre ne fusionne sa propre PR. Le Claude du leader peut fusionner quand le leader le lui demande.
 5. Les questions qui bloquent vont dans `docs/COMMUNICATION.md` (section « Questions ouvertes ») ou dans une issue GitHub.
 
 ## Communication entre les Claude

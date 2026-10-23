@@ -25,7 +25,9 @@
       "Bash(gh issue list:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue create:*)",
-      "Bash(gh issue comment:*)"
+      "Bash(gh issue comment:*)",
+      "Bash(git merge:*)",
+      "Bash(gh pr merge:*)"
     ],
     "deny": [
       "Bash(git push origin main:*)",
@@ -33,8 +35,6 @@
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)",
-      "Bash(git merge:*)",
-      "Bash(gh pr merge:*)",
       "Bash(gh repo delete:*)"
     ]
   }

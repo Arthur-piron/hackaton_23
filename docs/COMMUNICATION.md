@@ -7,7 +7,7 @@ Source de vérité partagée par les trois Claude. Chacun le lit au démarrage e
 | Membre | GitHub | Rôle |
 |---|---|---|
 | Arthur | @Arthur-piron | Leader |
-| Léandre | @? | Membre |
+| Léandre | @t3a1 | Membre |
 | ? | @? | Membre |
 
 ## Leader
@@ -27,6 +27,7 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`.
 | Date | Décision | Par |
 |---|---|---|
 | 2026-10-23 | Le repo sert de canal entre les Claude ; `main` protégée, seul le leader fusionne. | Arthur |
+| 2026-10-23 | Le Claude du leader peut fusionner les PR quand le leader le demande. | Arthur |
 
 ## Questions ouvertes
 
