@@ -1,4 +1,20 @@
-# hackaton_23
+# LAST LIGHT (hackaton_23)
+
+Survie zombie en 3D vue de dessus, C++17 / raylib 5.5, pour Linux et Windows. Design du jeu : `docs/GAME.md`.
+
+## Compiler et lancer
+
+```
+cmake -S . -B build
+cmake --build build --config Release
+```
+
+L'exécutable est dans `build/` (Linux) ou `build/Release/` (Windows), avec le dossier `assets/` copié à côté.
+Prérequis : CMake 3.20+, un compilateur C++17 (Visual Studio Build Tools 2022 ou g++), et sous Linux les paquets de développement X11, OpenGL et ALSA (liste dans `.github/workflows/build.yml`).
+
+Test automatique : `lastlight --smoke 120 capture.png` lance une partie, simule 120 images, enregistre une capture dans le dossier courant et quitte.
+
+## Équipe
 
 Projet d'équipe à 3. Chaque membre travaille avec son propre Claude (Claude Code terminal, web ou Remote Control depuis le téléphone).
 

@@ -19,8 +19,10 @@ Membres, décisions et questions de fond. **Seul le leader le modifie** (dans se
 | Tâche | Branche | Responsable | Statut |
 |---|---|---|---|
 | Onboarding de Léandre | `feature/onboarding-leandre` | Léandre (@T3a1) | fusionnée |
-| Workflow /loop + design du jeu | `feature/workflow-loop` | Arthur (@Arthur-piron) | PR ouverte |
-| Squelette CMake + raylib | `feature/squelette` | Arthur (@Arthur-piron) | à faire |
+| Workflow /loop + design du jeu | `feature/workflow-loop` | Arthur (@Arthur-piron) | fusionnée (#5) |
+| Squelette CMake + raylib | `feature/squelette` | Arthur (@Arthur-piron) | PR ouverte |
+| CI Linux + Windows | `feature/ci` | Arthur (@Arthur-piron) | à faire |
+| Assets CC0 | `feature/assets` | Arthur (@Arthur-piron) | à faire |
 
 Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`. Le suivi tour par tour se fait dans l'issue.
 
@@ -45,3 +47,4 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`. Le sui
 | 2026-10-23 | Arthur | Mise en place du repo : règles, consignes Claude, permissions, workflow @claude, template de PR. |
 | 2026-10-23 | Léandre | Onboarding : pseudo GitHub @T3a1 ajouté dans « Membres ». |
 | 2026-10-23 | Arthur | Workflow /loop (`docs/LOOP.md`), design du jeu (`docs/GAME.md`), CODEOWNERS ouvert aux membres. |
+| 2026-10-24 | Arthur | Mode solo de nuit (fusion de ses propres PR jusqu'à 7h, approbations à 0 sur main). Squelette : CMake + raylib 5.5, machine à états, caméra qui suit, joueur ZQSD, mode `--smoke` de test automatique. |
