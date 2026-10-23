@@ -23,7 +23,14 @@ constexpr float kLookAhead = 0.25f;   // fraction de la distance de visée ajout
 constexpr float kMaxLookAhead = 3.0f;
 constexpr float kFootstepInterval = 0.36f;
 constexpr float kSprintFootstepInterval = 0.26f;
+// Taille du flash de bouche : proportionnelle à la secousse de l'arme.
+constexpr float kMuzzleBase = 0.8f;
+constexpr float kMuzzleShakeScale = 1.5f;
+constexpr float kPlayerBloodHeight = 1.1f;
+constexpr int kSmokeWeapon = 2; // mitraillette (catalogue d'Arsenal)
+constexpr int kSmokeAmmo = 1000;
 
+constexpr Color kBackgroundColor = {12, 14, 22, 255};
 constexpr Color kDamageColor = {255, 245, 220, 255};
 constexpr Color kPlayerDamageColor = {255, 80, 80, 255};
 constexpr Color kWaveColor = {230, 200, 120, 255};
@@ -61,12 +68,18 @@ Game::Game(const Options& options)
     for (const WeaponStats& weapon : Arsenal::catalog()) {
         weaponModels_.push_back(LoadModel(assetPath("models/blaster/" + weapon.model).c_str()));
     }
+    particles_ = std::make_unique<Particles>();
+    postFx_ = std::make_unique<PostFx>();
     loadAudio();
 
     startNewGame();
     if (options_.smokeFrames > 0) {
         // Test automatique : directement en combat, entouré de morts.
         state_ = State::Playing;
+        // Mitraillette : tir continu, la capture montre flashs, sang et morts.
+        arsenal_.unlock(kSmokeWeapon);
+        arsenal_.addAmmo(kSmokeWeapon, kSmokeAmmo);
+        arsenal_.select(kSmokeWeapon);
         waves_->spawnRing(player_->position(), 7.0f, 10, EnemyType::Walker);
         waves_->spawnRing(player_->position(), 10.0f, 6, EnemyType::Runner);
     } else {
@@ -77,6 +90,8 @@ Game::Game(const Options& options)
 Game::~Game()
 {
     for (Model& model : weaponModels_) UnloadModel(model);
+    postFx_.reset();
+    particles_.reset();
     waves_.reset();
     player_.reset();
     keeperModel_.reset();
@@ -126,6 +141,7 @@ void Game::startNewGame()
     arsenal_.reset();
     waves_->reset();
     projectiles_.clear();
+    particles_->clear();
     hud_.clear();
     events_.clear();
     cameraRig_.snapTo(player_->position());
@@ -183,6 +199,7 @@ void Game::update(float dt)
 {
     audio_.update(dt);
     hud_.update(dt);
+    postFx_->update(dt, 1.0f - player_->health() / player_->maxHealth());
 
     switch (state_) {
     case State::Menu:
@@ -250,6 +267,11 @@ void Game::updatePlaying(float dt)
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), world_, events_);
     resolveProjectiles();
+    resolveWallImpacts();
+    particles_->update(dt);
+    if (alive && c.sprint && Vector3Length(c.move) > 0.0f && player_->stamina() > 0.0f) {
+        particles_->sprintDust(player_->position(), c.move, dt);
+    }
     if (damage > 0.0f && alive) {
         // Le coup vient du mort le plus proche.
         Vector3 from = player_->position();
@@ -305,6 +327,30 @@ void Game::resolveProjectiles()
     }
 }
 
+void Game::resolveWallImpacts()
+{
+    const float wall = World::kHalfSize;
+    for (Projectile& p : projectiles_.projectiles()) {
+        if (!p.alive || (std::fabs(p.position.x) <= wall && std::fabs(p.position.z) <= wall)) continue;
+        p.alive = false;
+        // Premier mur franchi le long du segment parcouru pendant l'image.
+        float t = 1.0f;
+        Vector3 normal = {0.0f, 0.0f, 0.0f};
+        const auto crossing = [&](float from, float to, Vector3 axis) {
+            if (std::fabs(to) <= wall || std::fabs(from) > wall) return;
+            const float side = to > 0.0f ? 1.0f : -1.0f;
+            const float s = (side * wall - from) / (to - from);
+            if (s < t) {
+                t = s;
+                normal = Vector3Scale(axis, -side);
+            }
+        };
+        crossing(p.previous.x, p.position.x, {1.0f, 0.0f, 0.0f});
+        crossing(p.previous.z, p.position.z, {0.0f, 0.0f, 1.0f});
+        if (Vector3Length(normal) > 0.0f) particles_->impact(Vector3Lerp(p.previous, p.position, t), normal);
+    }
+}
+
 void Game::handleEvents()
 {
     for (const Event& ev : events_) {
@@ -313,6 +359,8 @@ void Game::handleEvents()
             const int weapon = static_cast<int>(ev.value);
             audio_.play(kShotSounds[weapon], 0.55f, 0.06f);
             cameraRig_.shake(arsenal_.stats().shake);
+            particles_->muzzleFlash(ev.position, ev.direction,
+                                    kMuzzleBase + kMuzzleShakeScale * arsenal_.stats().shake);
             break;
         }
         case EventType::DryFire:
@@ -324,6 +372,7 @@ void Game::handleEvents()
         case EventType::EnemyHit:
             audio_.playAt("hit_flesh", ev.position, 0.55f, 0.15f);
             hud_.addDamageNumber(Vector3Add(ev.position, {0.0f, 0.8f, 0.0f}), ev.value, kDamageColor);
+            particles_->bloodHit(ev.position, ev.direction);
             break;
         case EventType::EnemyKilled:
             audio_.playAt("body_fall", ev.position, 0.7f);
@@ -331,6 +380,8 @@ void Game::handleEvents()
             ++kills_;
             hitStop_ = std::max(hitStop_, kKillHitStop);
             cameraRig_.shake(kKillShake);
+            particles_->bloodKill(ev.position, ev.direction);
+            postFx_->killFlash();
             break;
         case EventType::EnemyAttack:
             audio_.playAt("zombie_attack", ev.position, 0.8f);
@@ -344,6 +395,8 @@ void Game::handleEvents()
             audio_.play("hit_heavy", 0.9f);
             cameraRig_.shake(kHurtShake);
             hud_.addDamageNumber(Vector3Add(ev.position, {0.0f, 2.0f, 0.0f}), ev.value, kPlayerDamageColor);
+            particles_->bloodHit(Vector3Add(ev.position, {0.0f, kPlayerBloodHeight, 0.0f}), ev.direction);
+            postFx_->hurt();
             break;
         case EventType::PlayerDied:
             cameraRig_.shake(kDeathShake);
@@ -406,12 +459,16 @@ HudData Game::hudData() const
 void Game::draw() const
 {
     BeginDrawing();
-    ClearBackground({12, 14, 22, 255});
+    ClearBackground(kBackgroundColor);
 
     if (state_ == State::Menu) {
         drawMenu();
     } else {
+        postFx_->begin();
+        ClearBackground(kBackgroundColor);
         drawWorld();
+        postFx_->end();
+        postFx_->draw();
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Paused) drawPauseOverlay();
         if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
@@ -429,6 +486,7 @@ void Game::drawWorld() const
     waves_->draw();
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
     projectiles_.draw();
+    particles_->draw(cameraRig_.camera());
     EndMode3D();
 }
 
