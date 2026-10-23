@@ -13,6 +13,7 @@ constexpr int kScreenHeight = 720;
 constexpr int kTargetFps = 144;
 // Au-delà, on ralentit la simulation plutôt que de laisser traverser les murs.
 constexpr float kMaxFrameTime = 0.05f;
+constexpr float kSmokeFrameTime = 1.0f / 60.0f;
 constexpr const char* kWindowTitle = "LAST LIGHT";
 
 constexpr float kKillHitStop = 0.035f;
@@ -23,11 +24,14 @@ constexpr float kLookAhead = 0.25f;   // fraction de la distance de visée ajout
 constexpr float kMaxLookAhead = 3.0f;
 constexpr float kFootstepInterval = 0.36f;
 constexpr float kSprintFootstepInterval = 0.26f;
+constexpr int kSmokeWeapon = 2; // mitraillette
+constexpr int kSmokeAmmo = 400;
 
 constexpr Color kDamageColor = {255, 245, 220, 255};
 constexpr Color kPlayerDamageColor = {255, 80, 80, 255};
 constexpr Color kWaveColor = {230, 200, 120, 255};
 constexpr Color kClearColor = {140, 230, 150, 255};
+constexpr Color kLevelColor = {90, 235, 200, 255};
 
 // Sons de tir par arme (indices du catalogue d'Arsenal).
 const char* const kShotSounds[] = {"gun_pistol", "gun_shotgun", "gun_pistol", "gun_rifle"};
@@ -65,10 +69,14 @@ Game::Game(const Options& options)
 
     startNewGame();
     if (options_.smokeFrames > 0) {
-        // Test automatique : directement en combat, entouré de morts.
+        // Test automatique : directement en combat, face à une horde (le pilote automatique la fauche).
         state_ = State::Playing;
-        waves_->spawnRing(player_->position(), 7.0f, 10, EnemyType::Walker);
-        waves_->spawnRing(player_->position(), 10.0f, 6, EnemyType::Runner);
+        waves_->spawnRing(Vector3Add(player_->position(), {0.0f, 0.0f, -8.0f}), 2.0f, 10, EnemyType::Walker);
+        waves_->spawnRing(Vector3Add(player_->position(), {0.0f, 0.0f, -14.0f}), 2.5f, 6, EnemyType::Runner);
+        // La mitraillette enchaîne les morts : la capture montre l'or au sol et un combo.
+        arsenal_.unlock(kSmokeWeapon);
+        arsenal_.addAmmo(kSmokeWeapon, kSmokeAmmo);
+        arsenal_.select(kSmokeWeapon);
     } else {
         audio_.playMusic("menu.ogg", 0.45f);
     }
@@ -103,12 +111,14 @@ void Game::loadAudio()
                                   "footstep_grass_003.ogg", "footstep_grass_004.ogg"}, 2);
     audio_.loadGroup("wave_bell", {"wave_bell.ogg"}, 1);
     audio_.loadGroup("ui_confirm", {"ui_confirm.ogg"}, 1);
+    audio_.loadGroup("pickup", {"pickup.ogg"}, 6);
 }
 
 void Game::run()
 {
     while (!WindowShouldClose()) {
-        const float dt = std::min(GetFrameTime(), kMaxFrameTime);
+        // En --smoke, la simulation avance à pas fixe : même durée simulée quelle que soit la machine.
+        const float dt = options_.smokeFrames > 0 ? kSmokeFrameTime : std::min(GetFrameTime(), kMaxFrameTime);
         update(dt);
         draw();
 
@@ -126,6 +136,8 @@ void Game::startNewGame()
     arsenal_.reset();
     waves_->reset();
     projectiles_.clear();
+    economy_.reset();
+    pickups_.clear();
     hud_.clear();
     events_.clear();
     cameraRig_.snapTo(player_->position());
@@ -250,6 +262,8 @@ void Game::updatePlaying(float dt)
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), world_, events_);
     resolveProjectiles();
+    economy_.update(dt);
+    pickups_.update(dt, player_->position(), economy_, events_);
     if (damage > 0.0f && alive) {
         // Le coup vient du mort le plus proche.
         Vector3 from = player_->position();
@@ -293,7 +307,7 @@ void Game::resolveProjectiles()
             const Vector3 b = {p.position.x, center.y, p.position.z};
             float t = 0.0f;
             if (!segmentHitsSphere(a, b, center, e.radius(), t)) continue;
-            e.hit(p.damage, p.velocity, p.knockback, events_);
+            if (e.hit(p.damage, p.velocity, p.knockback, events_)) rewardKill(e);
             p.lastHit = e.id();
             if (p.pierce > 0) {
                 --p.pierce;
@@ -303,6 +317,13 @@ void Game::resolveProjectiles()
             }
         }
     }
+}
+
+void Game::rewardKill(const Enemy& enemy)
+{
+    const Economy::Reward reward = economy_.addKill(enemy.type());
+    pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
+    hud_.pulseCombo();
 }
 
 void Game::handleEvents()
@@ -343,6 +364,7 @@ void Game::handleEvents()
         case EventType::PlayerHurt:
             audio_.play("hit_heavy", 0.9f);
             cameraRig_.shake(kHurtShake);
+            economy_.onPlayerDamaged();
             hud_.addDamageNumber(Vector3Add(ev.position, {0.0f, 2.0f, 0.0f}), ev.value, kPlayerDamageColor);
             break;
         case EventType::PlayerDied:
@@ -356,6 +378,17 @@ void Game::handleEvents()
             audio_.play("ui_confirm", 0.7f, 0.0f);
             hud_.announce("VAGUE TERMINEE", waves_->allWavesCleared() ? "L'aube se leve..." : "Reprends ton souffle",
                           kClearColor);
+            break;
+        case EventType::GoldPicked:
+            audio_.play("pickup", 0.4f, 0.15f);
+            hud_.pulseGold();
+            break;
+        case EventType::XpPicked:
+            audio_.play("pickup", 0.25f, 0.1f);
+            break;
+        case EventType::LevelUp:
+            audio_.play("ui_confirm", 0.8f, 0.0f);
+            hud_.announce(TextFormat("NIVEAU %d !", static_cast<int>(ev.value)), "Une carte t'attend...", kLevelColor);
             break;
         }
     }
@@ -400,6 +433,12 @@ HudData Game::hudData() const
     d.score = score_;
     d.kills = kills_;
     d.hurtFlash = player_->hurtFlash();
+    d.gold = economy_.gold();
+    d.level = economy_.level();
+    d.xpProgress = economy_.xpProgress();
+    d.combo = economy_.combo();
+    d.comboMultiplier = economy_.comboMultiplier();
+    d.comboTimeLeft = economy_.comboTimeLeft() / Economy::kComboWindow;
     return d;
 }
 
@@ -429,6 +468,7 @@ void Game::drawWorld() const
     waves_->draw();
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
     projectiles_.draw();
+    pickups_.draw();
     EndMode3D();
 }
 

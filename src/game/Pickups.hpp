@@ -1,0 +1,38 @@
+#pragma once
+
+#include "game/Events.hpp"
+#include "raylib.h"
+
+#include <vector>
+
+class Economy;
+
+// Objets lâchés au sol par les morts : pièces d'or et orbes d'XP. Ils jaillissent,
+// rebondissent, sont aimantés vers le joueur puis disparaissent s'ils traînent.
+class Pickups {
+public:
+    void clear() { items_.clear(); }
+    // Fait jaillir l'or (en plusieurs pièces) et l'XP d'une mort.
+    void spawnLoot(Vector3 position, int gold, int xp);
+    // Aimante, ramasse (crédite l'économie) et fait vieillir les objets.
+    void update(float dt, Vector3 playerPosition, Economy& economy, EventQueue& events);
+    void draw() const;
+
+private:
+    enum class Kind { Gold, Xp };
+
+    struct Item {
+        Kind kind = Kind::Gold;
+        int value = 0;
+        Vector3 position = {0.0f, 0.0f, 0.0f};
+        Vector3 velocity = {0.0f, 0.0f, 0.0f};
+        float age = 0.0f;
+        float phase = 0.0f;   // décale rotation et flottement d'un objet à l'autre
+        bool attracted = false;
+        bool collected = false;
+    };
+
+    void spawn(Kind kind, int value, Vector3 position);
+
+    std::vector<Item> items_;
+};

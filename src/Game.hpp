@@ -3,7 +3,9 @@
 #include "core/AnimatedModel.hpp"
 #include "core/Audio.hpp"
 #include "game/CameraRig.hpp"
+#include "game/Economy.hpp"
 #include "game/Events.hpp"
+#include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Projectile.hpp"
 #include "game/WaveManager.hpp"
@@ -53,6 +55,8 @@ private:
     // Pilote automatique du mode --smoke : vise l'ennemi le plus proche et tire.
     Controls autopilot() const;
     void resolveProjectiles();
+    // Fait progresser le combo et lâche l'or et l'XP d'un ennemi qui vient de mourir.
+    void rewardKill(const Enemy& enemy);
     void handleEvents();
     void updateFootsteps(float dt);
 
@@ -78,6 +82,8 @@ private:
     std::vector<Model> weaponModels_;
     Arsenal arsenal_;
     ProjectileSystem projectiles_;
+    Economy economy_;
+    Pickups pickups_;
     CameraRig cameraRig_;
     Hud hud_;
     EventQueue events_;
