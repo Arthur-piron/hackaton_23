@@ -2,7 +2,7 @@
 
 Tous les liens ci-dessous se téléchargent directement avec `curl` / `file(DOWNLOAD)` (pas de compte, pas de navigateur).
 On **commite dans `assets/` uniquement les fichiers utilisés** (pas les zips entiers), pour que le build, la CI et Docker ne dépendent pas du réseau.
-Le script `tools/fetch_assets.cmake` (à écrire, rôle C) télécharge les zips dans `build/_assets_cache/` et copie la sélection dans `assets/`. Il se lance pareil sous Linux et Windows : `cmake -P tools/fetch_assets.cmake`.
+Le script `tools/fetch_assets.cmake` télécharge les zips dans `build/_assets_cache/` et copie la sélection dans `assets/`. Il se lance pareil sous Linux et Windows : `cmake -P tools/fetch_assets.cmake`.
 
 ## Modèles 3D (GLB)
 
