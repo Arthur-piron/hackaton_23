@@ -1,0 +1,75 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (gcc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances raylib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake xvfb \
+            libasound2-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev \
+            libxinerama-dev libgl1-mesa-dev libglu1-mesa-dev \
+            libwayland-dev libxkbcommon-dev mesa-utils
+
+      - name: Configuration
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compilation
+        run: cmake --build build --parallel
+
+      # Lance réellement le jeu (rendu logiciel Mesa sous Xvfb) : détecte les
+      # plantages au chargement des assets et des shaders.
+      - name: Test automatique (--smoke)
+        working-directory: build
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./lastlight --smoke 180 smoke-linux.png
+
+      - name: Capture d'écran
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-linux
+          path: build/smoke-linux.png
+          if-no-files-found: warn
+
+      - name: Exécutable Linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastLight-linux
+          path: |
+            build/lastlight
+            build/assets/
+
+  windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configuration
+        run: cmake -S . -B build
+
+      - name: Compilation
+        run: cmake --build build --config Release --parallel
+
+      # Pas de test --smoke : les runners Windows n'ont pas d'OpenGL 3.3.
+      - name: Exécutable Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastLight-windows
+          path: |
+            build/Release/lastlight.exe
+            build/Release/assets/
