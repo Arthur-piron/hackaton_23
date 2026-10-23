@@ -38,5 +38,5 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`.
 |---|---|---|
 | 2026-10-23 | Arthur | Mise en place du repo : règles, consignes Claude, permissions, workflow @claude, template de PR. |
 | 2026-10-23 | Léandre | Onboarding : pseudo GitHub @T3a1 ajouté dans « Membres ». |
-| 2026-10-23 | Arthur | Ajout de docs/PROMPT-LEANDRE.md : prompts de démarrage pour le Claude de Léandre. |
-| 2026-10-23 | Arthur | Ajout de docs/LOOP-MEMBRE.md : boucle /loop autonome pour les membres (propositions, features acceptées, relectures). |
+| 2026-10-23 | Arthur | Ajout de docs/prompts/membre/DEMARRAGE-LEANDRE.md : prompts de démarrage pour le Claude de Léandre. |
+| 2026-10-23 | Arthur | Ajout de docs/prompts/ : boucles /loop autonomes du leader (leader/LOOP.md) et des membres (membre/LOOP.md) (propositions, features acceptées, relectures). |

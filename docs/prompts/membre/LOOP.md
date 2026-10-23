@@ -3,7 +3,7 @@
 À lancer dans le Claude Code de chaque membre, depuis son clone du repo :
 
 ```
-/loop 30m Lis docs/LOOP-MEMBRE.md sur origin/main et exécute la section « Prompt » pour ce tour. Je suis <PRÉNOM>, GitHub @<PSEUDO>.
+/loop 30m Lis docs/prompts/membre/LOOP.md sur origin/main et exécute la section « Prompt » pour ce tour. Je suis <PRÉNOM>, GitHub @<PSEUDO>.
 ```
 
 Remplace `<PRÉNOM>` et `<PSEUDO>` (par exemple `Léandre`, `T3a1`). La boucle tourne tant que la session est ouverte, 7 jours au maximum. Pour recevoir les notifications sur ton téléphone, lance aussi `/remote-control`.
