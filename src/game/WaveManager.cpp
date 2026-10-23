@@ -1,0 +1,190 @@
+#include "game/WaveManager.hpp"
+
+#include "core/AssetPath.hpp"
+#include "game/World.hpp"
+#include "raymath.h"
+
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <unordered_map>
+
+namespace {
+constexpr float kFirstIntermission = 4.0f;
+constexpr float kIntermission = 15.0f;
+constexpr float kSpawnMargin = 1.5f;
+// Distance minimale entre un point d'apparition et le joueur.
+constexpr float kMinSpawnDistance = 14.0f;
+constexpr float kSeparationStrength = 4.0f;
+
+int waveQuota(int wave)
+{
+    return 6 + wave * 5;
+}
+
+int maxAlive(int wave)
+{
+    return std::min(20 + wave * 6, 110);
+}
+
+float spawnInterval(int wave)
+{
+    return std::max(0.18f, 0.9f - wave * 0.07f);
+}
+
+int roll(int max)
+{
+    return GetRandomValue(1, max);
+}
+}
+
+WaveManager::WaveManager()
+{
+    // Plusieurs types partagent le même fichier : chaque fichier n'est chargé qu'une fois.
+    std::unordered_map<std::string, std::shared_ptr<AnimatedModel>> loaded;
+    for (size_t i = 0; i < models_.size(); ++i) {
+        const std::string file = enemyStats(static_cast<EnemyType>(i)).model;
+        std::shared_ptr<AnimatedModel>& model = loaded[file];
+        if (!model) model = std::make_shared<AnimatedModel>(assetPath("models/graveyard/" + file));
+        models_[i] = model;
+    }
+    reset();
+}
+
+WaveManager::~WaveManager() = default;
+
+void WaveManager::reset()
+{
+    enemies_.clear();
+    phase_ = Phase::Intermission;
+    wave_ = 0;
+    timer_ = kFirstIntermission;
+    toSpawn_ = 0;
+    spawnTimer_ = 0.0f;
+    cleared_ = false;
+}
+
+int WaveManager::remaining() const
+{
+    int alive = 0;
+    for (const Enemy& e : enemies_) alive += e.isAlive() ? 1 : 0;
+    return alive + toSpawn_;
+}
+
+void WaveManager::skipIntermission()
+{
+    if (phase_ == Phase::Intermission && !cleared_) timer_ = std::min(timer_, 0.01f);
+}
+
+void WaveManager::spawnRing(Vector3 center, float radius, int count, EnemyType type)
+{
+    for (int i = 0; i < count; ++i) {
+        const float angle = 2.0f * PI * static_cast<float>(i) / static_cast<float>(count);
+        const Vector3 p = {center.x + std::cos(angle) * radius, 0.0f, center.z + std::sin(angle) * radius};
+        enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)], p);
+    }
+}
+
+void WaveManager::startWave(EventQueue& events)
+{
+    ++wave_;
+    phase_ = Phase::Fighting;
+    toSpawn_ = waveQuota(wave_);
+    spawnTimer_ = 0.0f;
+    events.push_back({EventType::WaveStarted, {0.0f, 0.0f, 0.0f}, static_cast<float>(wave_)});
+}
+
+EnemyType WaveManager::pickType() const
+{
+    const int r = roll(100);
+    if (wave_ >= 4 && r <= 4 + wave_) return EnemyType::Brute;
+    if (wave_ >= 2 && r <= 20 + wave_ * 3) return EnemyType::Runner;
+    if (wave_ >= 3 && r <= 40 + wave_ * 3) return EnemyType::Skeleton;
+    return EnemyType::Walker;
+}
+
+Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition) const
+{
+    const float edge = World::kHalfSize - kSpawnMargin;
+    Vector3 best = {edge, 0.0f, edge};
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        const float along = static_cast<float>(GetRandomValue(-1000, 1000)) / 1000.0f * edge;
+        Vector3 p;
+        switch (GetRandomValue(0, 3)) {
+        case 0: p = {along, 0.0f, -edge}; break;
+        case 1: p = {along, 0.0f, edge}; break;
+        case 2: p = {-edge, 0.0f, along}; break;
+        default: p = {edge, 0.0f, along}; break;
+        }
+        best = p;
+        if (Vector3Distance(p, playerPosition) >= kMinSpawnDistance) break;
+    }
+    return best;
+}
+
+void WaveManager::separate(float dt)
+{
+    // Les morts se repoussent entre eux pour ne pas se superposer.
+    for (size_t i = 0; i < enemies_.size(); ++i) {
+        if (!enemies_[i].isAlive()) continue;
+        for (size_t j = i + 1; j < enemies_.size(); ++j) {
+            if (!enemies_[j].isAlive()) continue;
+            const Vector3 a = enemies_[i].position();
+            const Vector3 b = enemies_[j].position();
+            const float minDistance = enemies_[i].radius() + enemies_[j].radius();
+            const float dx = b.x - a.x;
+            const float dz = b.z - a.z;
+            const float distSq = dx * dx + dz * dz;
+            if (distSq >= minDistance * minDistance || distSq < 1e-6f) continue;
+            const float dist = std::sqrt(distSq);
+            const float overlap = (minDistance - dist) * std::min(1.0f, kSeparationStrength * dt * 10.0f) * 0.5f;
+            const Vector3 n = {dx / dist, 0.0f, dz / dist};
+            enemies_[i].push(Vector3Scale(n, -overlap));
+            enemies_[j].push(Vector3Scale(n, overlap));
+        }
+    }
+}
+
+float WaveManager::update(float dt, Vector3 playerPosition, const World& world, EventQueue& events)
+{
+    if (phase_ == Phase::Intermission && !cleared_) {
+        timer_ -= dt;
+        if (timer_ <= 0.0f) startWave(events);
+    }
+
+    if (phase_ == Phase::Fighting && toSpawn_ > 0) {
+        spawnTimer_ -= dt;
+        int alive = 0;
+        for (const Enemy& e : enemies_) alive += e.isAlive() ? 1 : 0;
+        if (spawnTimer_ <= 0.0f && alive < maxAlive(wave_)) {
+            spawnTimer_ = spawnInterval(wave_);
+            const EnemyType type = pickType();
+            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)], pickSpawnPoint(playerPosition));
+            --toSpawn_;
+        }
+    }
+
+    float damage = 0.0f;
+    for (Enemy& e : enemies_) damage += e.update(dt, playerPosition, events);
+    separate(dt);
+    for (Enemy& e : enemies_) {
+        if (!e.isAlive()) continue;
+        const Vector3 clamped = world.clampToBounds(e.position(), e.radius());
+        e.push(Vector3Subtract(clamped, e.position()));
+    }
+    enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [](const Enemy& e) { return e.isRemovable(); }),
+                   enemies_.end());
+
+    if (phase_ == Phase::Fighting && remaining() == 0) {
+        events.push_back({EventType::WaveCleared, playerPosition, static_cast<float>(wave_)});
+        phase_ = Phase::Intermission;
+        timer_ = kIntermission;
+        if (wave_ >= kFinalWave) cleared_ = true;
+    }
+    return damage;
+}
+
+void WaveManager::draw() const
+{
+    for (const Enemy& e : enemies_) e.draw();
+}

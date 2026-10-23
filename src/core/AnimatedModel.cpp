@@ -48,8 +48,10 @@ AnimatedModel::AnimatedModel(const std::string& path)
     const size_t nodeCount = data->nodes_count;
     parents_.assign(nodeCount, -1);
     basePose_.resize(nodeCount);
+    nodeNames_.resize(nodeCount);
     for (size_t i = 0; i < nodeCount; ++i) {
         const cgltf_node& node = data->nodes[i];
+        nodeNames_[i] = node.name ? node.name : "";
         if (node.parent) parents_[i] = static_cast<int>(node.parent - data->nodes);
         NodePose& pose = basePose_[i];
         if (node.has_matrix) {
@@ -170,6 +172,7 @@ void AnimatedModel::update(AnimationState& state, float dt) const
 {
     state.time += dt * state.speed;
     state.previousTime += dt * state.speed;
+    state.overlayTime += dt;
     if (state.blend < 1.0f) {
         state.blend = state.blendDuration > 0.0f ? std::min(1.0f, state.blend + dt / state.blendDuration) : 1.0f;
     }
@@ -217,6 +220,59 @@ void AnimatedModel::computeWorld(const std::vector<NodePose>& pose, std::vector<
     }
 }
 
+int AnimatedModel::findNode(const std::string& name) const
+{
+    for (size_t i = 0; i < nodeNames_.size(); ++i) {
+        if (nodeNames_[i] == name) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+unsigned AnimatedModel::nodeMask(std::initializer_list<const char*> names) const
+{
+    unsigned mask = 0;
+    for (const char* name : names) {
+        const int node = findNode(name);
+        if (node >= 0 && node < 32) mask |= 1u << node;
+    }
+    return mask;
+}
+
+float AnimatedModel::wrappedTime(int clip, float time, bool loop) const
+{
+    const bool valid = clip >= 0 && clip < static_cast<int>(clips_.size());
+    return wrapTime(time, valid ? clips_[clip].duration : 0.0f, loop);
+}
+
+void AnimatedModel::evaluate(const AnimationState& state) const
+{
+    samplePose(state.clip, wrappedTime(state.clip, state.time, state.loop), scratchPose_);
+    if (state.blend < 1.0f && state.previousClip >= 0) {
+        samplePose(state.previousClip, wrappedTime(state.previousClip, state.previousTime, true), scratchPrevious_);
+        for (size_t n = 0; n < scratchPose_.size(); ++n) {
+            NodePose& to = scratchPose_[n];
+            const NodePose& from = scratchPrevious_[n];
+            to.translation = Vector3Lerp(from.translation, to.translation, state.blend);
+            to.rotation = QuaternionSlerp(from.rotation, to.rotation, state.blend);
+            to.scale = Vector3Lerp(from.scale, to.scale, state.blend);
+        }
+    }
+    if (state.overlayClip >= 0 && state.overlayMask != 0) {
+        samplePose(state.overlayClip, wrappedTime(state.overlayClip, state.overlayTime, true), scratchPrevious_);
+        for (size_t n = 0; n < scratchPose_.size() && n < 32; ++n) {
+            if (state.overlayMask & (1u << n)) scratchPose_[n] = scratchPrevious_[n];
+        }
+    }
+    computeWorld(scratchPose_, scratchWorld_);
+}
+
+Matrix AnimatedModel::nodeTransform(const AnimationState& state, int node, const Matrix& transform) const
+{
+    if (node < 0 || node >= static_cast<int>(parents_.size())) return transform;
+    evaluate(state);
+    return MatrixMultiply(scratchWorld_[node], transform);
+}
+
 void AnimatedModel::draw(const AnimationState& state, const Matrix& transform, Color tint) const
 {
     if (meshNodes_.empty()) {
@@ -229,24 +285,7 @@ void AnimatedModel::draw(const AnimationState& state, const Matrix& transform, C
         return;
     }
 
-    const int clipCount = static_cast<int>(clips_.size());
-    const auto clipTime = [&](int clip, float time, bool loop) {
-        return wrapTime(time, clip >= 0 && clip < clipCount ? clips_[clip].duration : 0.0f, loop);
-    };
-
-    samplePose(state.clip, clipTime(state.clip, state.time, state.loop), scratchPose_);
-    if (state.blend < 1.0f && state.previousClip >= 0) {
-        samplePose(state.previousClip, clipTime(state.previousClip, state.previousTime, true), scratchPrevious_);
-        for (size_t n = 0; n < scratchPose_.size(); ++n) {
-            NodePose& to = scratchPose_[n];
-            const NodePose& from = scratchPrevious_[n];
-            to.translation = Vector3Lerp(from.translation, to.translation, state.blend);
-            to.rotation = QuaternionSlerp(from.rotation, to.rotation, state.blend);
-            to.scale = Vector3Lerp(from.scale, to.scale, state.blend);
-        }
-    }
-    computeWorld(scratchPose_, scratchWorld_);
-
+    evaluate(state);
     for (int m = 0; m < model_.meshCount; ++m) {
         const int node = meshNodes_[m];
         const Matrix meshTransform = MatrixMultiply(MatrixMultiply(inverseBind_[m], scratchWorld_[node]), transform);

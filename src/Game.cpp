@@ -4,6 +4,7 @@
 #include "raylib.h"
 #include "raymath.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -13,6 +14,35 @@ constexpr int kTargetFps = 144;
 // Au-delà, on ralentit la simulation plutôt que de laisser traverser les murs.
 constexpr float kMaxFrameTime = 0.05f;
 constexpr const char* kWindowTitle = "LAST LIGHT";
+
+constexpr float kKillHitStop = 0.035f;
+constexpr float kKillShake = 0.06f;
+constexpr float kHurtShake = 0.45f;
+constexpr float kDeathShake = 0.8f;
+constexpr float kLookAhead = 0.25f;   // fraction de la distance de visée ajoutée au cadrage
+constexpr float kMaxLookAhead = 3.0f;
+constexpr float kFootstepInterval = 0.36f;
+constexpr float kSprintFootstepInterval = 0.26f;
+
+constexpr Color kDamageColor = {255, 245, 220, 255};
+constexpr Color kPlayerDamageColor = {255, 80, 80, 255};
+constexpr Color kWaveColor = {230, 200, 120, 255};
+constexpr Color kClearColor = {140, 230, 150, 255};
+
+// Sons de tir par arme (indices du catalogue d'Arsenal).
+const char* const kShotSounds[] = {"gun_pistol", "gun_shotgun", "gun_pistol", "gun_rifle"};
+
+// raylib nomme les touches d'après leur position sur un clavier QWERTY :
+// KEY_W/A/S/D correspondent physiquement à Z/Q/S/D sur un clavier AZERTY.
+Vector3 readMoveKeys()
+{
+    Vector3 dir = {0.0f, 0.0f, 0.0f};
+    if (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)) dir.z -= 1.0f;
+    if (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)) dir.z += 1.0f;
+    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) dir.x -= 1.0f;
+    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) dir.x += 1.0f;
+    return Vector3Length(dir) > 0.0f ? Vector3Normalize(dir) : dir;
+}
 }
 
 Game::Game(const Options& options)
@@ -23,26 +53,62 @@ Game::Game(const Options& options)
     InitAudioDevice();
     SetTargetFPS(kTargetFps);
     SetExitKey(KEY_NULL); // Échap sert à la pause, pas à quitter.
+    HideCursor();         // remplacé par le réticule du HUD
 
     keeperModel_ = std::make_unique<AnimatedModel>(assetPath("models/graveyard/character-keeper.glb"));
     player_ = std::make_unique<Player>(*keeperModel_);
+    waves_ = std::make_unique<WaveManager>();
+    for (const WeaponStats& weapon : Arsenal::catalog()) {
+        weaponModels_.push_back(LoadModel(assetPath("models/blaster/" + weapon.model).c_str()));
+    }
+    loadAudio();
+
     startNewGame();
-    if (options_.smokeFrames > 0) state_ = State::Playing;
+    if (options_.smokeFrames > 0) {
+        // Test automatique : directement en combat, entouré de morts.
+        state_ = State::Playing;
+        waves_->spawnRing(player_->position(), 7.0f, 10, EnemyType::Walker);
+        waves_->spawnRing(player_->position(), 10.0f, 6, EnemyType::Runner);
+    } else {
+        audio_.playMusic("menu.ogg", 0.45f);
+    }
 }
 
 Game::~Game()
 {
-    // Les ressources GPU doivent être libérées avant la fermeture de la fenêtre.
+    for (Model& model : weaponModels_) UnloadModel(model);
+    waves_.reset();
     player_.reset();
     keeperModel_.reset();
     CloseAudioDevice();
     CloseWindow();
 }
 
+void Game::loadAudio()
+{
+    audio_.loadGroup("gun_pistol", {"gun_pistol.ogg"}, 8);
+    audio_.loadGroup("gun_shotgun", {"gun_shotgun.ogg"}, 4);
+    audio_.loadGroup("gun_rifle", {"gun_rifle.ogg"}, 4);
+    audio_.loadGroup("dry_fire", {"ui_error.ogg"}, 2);
+    audio_.loadGroup("reload", {"reload_000.ogg", "reload_001.ogg", "reload_002.ogg"}, 2);
+    audio_.loadGroup("hit_flesh", {"hit_flesh_000.ogg", "hit_flesh_001.ogg", "hit_flesh_002.ogg",
+                                   "hit_flesh_003.ogg", "hit_flesh_004.ogg"}, 4);
+    audio_.loadGroup("hit_heavy", {"hit_heavy_000.ogg", "hit_heavy_001.ogg", "hit_heavy_002.ogg"}, 2);
+    audio_.loadGroup("body_fall", {"body_fall_000.ogg", "body_fall_001.ogg", "body_fall_002.ogg"}, 4);
+    audio_.loadGroup("zombie_groan", {"zombie_groan_0.ogg", "zombie_groan_1.ogg", "zombie_moan_0.ogg",
+                                      "zombie_moan_1.ogg", "zombie_moan_2.ogg", "zombie_moan_3.ogg"}, 3);
+    audio_.loadGroup("zombie_runner", {"zombie_runner.ogg"}, 3);
+    audio_.loadGroup("zombie_attack", {"zombie_attack.ogg"}, 3);
+    audio_.loadGroup("footstep", {"footstep_grass_000.ogg", "footstep_grass_001.ogg", "footstep_grass_002.ogg",
+                                  "footstep_grass_003.ogg", "footstep_grass_004.ogg"}, 2);
+    audio_.loadGroup("wave_bell", {"wave_bell.ogg"}, 1);
+    audio_.loadGroup("ui_confirm", {"ui_confirm.ogg"}, 1);
+}
+
 void Game::run()
 {
     while (!WindowShouldClose()) {
-        const float dt = GetFrameTime() < kMaxFrameTime ? GetFrameTime() : kMaxFrameTime;
+        const float dt = std::min(GetFrameTime(), kMaxFrameTime);
         update(dt);
         draw();
 
@@ -57,7 +123,15 @@ void Game::run()
 void Game::startNewGame()
 {
     player_->reset({0.0f, 0.0f, 0.0f});
+    arsenal_.reset();
+    waves_->reset();
+    projectiles_.clear();
+    hud_.clear();
+    events_.clear();
     cameraRig_.snapTo(player_->position());
+    score_ = 0;
+    kills_ = 0;
+    hitStop_ = 0.0f;
 }
 
 Vector3 Game::mouseGroundPoint() const
@@ -68,12 +142,53 @@ Vector3 Game::mouseGroundPoint() const
     return {ray.position.x + ray.direction.x * t, 0.0f, ray.position.z + ray.direction.z * t};
 }
 
+Game::Controls Game::readControls() const
+{
+    Controls c;
+    c.move = readMoveKeys();
+    c.aim = mouseGroundPoint();
+    c.sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    c.fireHeld = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    c.firePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    c.reload = IsKeyPressed(KEY_R);
+    for (int i = 0; i < 4; ++i) {
+        if (IsKeyPressed(KEY_ONE + i)) c.selectWeapon = i;
+    }
+    const float wheel = GetMouseWheelMove();
+    if (wheel > 0.0f) c.cycleWeapon = -1;
+    if (wheel < 0.0f) c.cycleWeapon = 1;
+    return c;
+}
+
+Game::Controls Game::autopilot() const
+{
+    Controls c;
+    const Vector3 me = player_->position();
+    c.aim = Vector3Add(me, player_->forward());
+    float best = 1e9f;
+    for (const Enemy& e : waves_->enemies()) {
+        if (!e.isAlive()) continue;
+        const float d = Vector3DistanceSqr(e.position(), me);
+        if (d < best) {
+            best = d;
+            c.aim = e.position();
+        }
+    }
+    c.fireHeld = true;
+    c.firePressed = (frameCount_ % 12) == 0;
+    return c;
+}
+
 void Game::update(float dt)
 {
+    audio_.update(dt);
+    hud_.update(dt);
+
     switch (state_) {
     case State::Menu:
         if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             startNewGame();
+            audio_.playMusic("night_ambience.ogg", 0.6f);
             state_ = State::Playing;
         }
         break;
@@ -82,18 +197,210 @@ void Game::update(float dt)
             state_ = State::Paused;
             break;
         }
-        player_->update(dt, world_, mouseGroundPoint());
-        cameraRig_.update(dt, player_->position());
+        updatePlaying(dt);
         break;
     case State::Paused:
         if (IsKeyPressed(KEY_ESCAPE)) state_ = State::Playing;
-        if (IsKeyPressed(KEY_Q) && IsKeyDown(KEY_LEFT_CONTROL)) state_ = State::Menu;
+        if (IsKeyPressed(KEY_Q) && IsKeyDown(KEY_LEFT_CONTROL)) {
+            audio_.playMusic("menu.ogg", 0.45f);
+            state_ = State::Menu;
+        }
         break;
     case State::GameOver:
     case State::Victory:
-        if (IsKeyPressed(KEY_ENTER)) state_ = State::Menu;
+        cameraRig_.update(dt, player_->position());
+        if (IsKeyPressed(KEY_ENTER)) {
+            startNewGame();
+            audio_.playMusic("night_ambience.ogg", 0.6f);
+            state_ = State::Playing;
+        } else if (IsKeyPressed(KEY_ESCAPE)) {
+            audio_.playMusic("menu.ogg", 0.45f);
+            state_ = State::Menu;
+        }
         break;
     }
+}
+
+void Game::updatePlaying(float dt)
+{
+    // Hit-stop : la simulation se fige un court instant sur un coup important.
+    if (hitStop_ > 0.0f) {
+        hitStop_ -= dt;
+        return;
+    }
+
+    const Controls c = options_.smokeFrames > 0 ? autopilot() : readControls();
+    const bool alive = !player_->isDead();
+
+    if (alive && waves_->phase() == WaveManager::Phase::Intermission && IsKeyPressed(KEY_ENTER)) {
+        waves_->skipIntermission();
+    }
+
+    player_->update(dt, world_, c.aim, alive ? c.move : Vector3{0.0f, 0.0f, 0.0f}, c.sprint);
+    if (alive) {
+        if (c.selectWeapon >= 0) arsenal_.select(c.selectWeapon);
+        if (c.cycleWeapon != 0) arsenal_.cycle(c.cycleWeapon);
+        if (arsenal_.update(dt, c.fireHeld, c.firePressed, c.reload, player_->muzzle(), player_->forward(),
+                            projectiles_, events_)) {
+            player_->notifyShot();
+            player_->applyRecoil(Vector3Scale(player_->forward(), -arsenal_.stats().recoil));
+        }
+    }
+
+    projectiles_.update(dt);
+    const float damage = waves_->update(dt, player_->position(), world_, events_);
+    resolveProjectiles();
+    if (damage > 0.0f && alive) {
+        // Le coup vient du mort le plus proche.
+        Vector3 from = player_->position();
+        float best = 1e9f;
+        for (const Enemy& e : waves_->enemies()) {
+            const float d = Vector3DistanceSqr(e.position(), player_->position());
+            if (e.isAlive() && d < best) {
+                best = d;
+                from = e.position();
+            }
+        }
+        player_->takeDamage(damage, from, events_);
+    }
+
+    const Vector3 toAim = Vector3Subtract(c.aim, player_->position());
+    const float aimDistance = Vector3Length(toAim);
+    const Vector3 lookAhead = aimDistance > 0.01f
+        ? Vector3Scale(toAim, std::min(kMaxLookAhead, aimDistance * kLookAhead) / aimDistance)
+        : Vector3{0.0f, 0.0f, 0.0f};
+    cameraRig_.update(dt, player_->position(), lookAhead);
+    audio_.setListener(player_->position());
+    updateFootsteps(dt);
+    handleEvents();
+
+    if (player_->deathFinished()) {
+        state_ = State::GameOver;
+    } else if (waves_->allWavesCleared()) {
+        state_ = State::Victory;
+    }
+}
+
+void Game::resolveProjectiles()
+{
+    for (Projectile& p : projectiles_.projectiles()) {
+        if (!p.alive) continue;
+        for (Enemy& e : waves_->enemies()) {
+            if (!e.isAlive() || e.id() == p.lastHit) continue;
+            // Les balles volent à hauteur de la main : on teste dans le plan du torse.
+            const Vector3 center = e.hitCenter();
+            const Vector3 a = {p.previous.x, center.y, p.previous.z};
+            const Vector3 b = {p.position.x, center.y, p.position.z};
+            float t = 0.0f;
+            if (!segmentHitsSphere(a, b, center, e.radius(), t)) continue;
+            e.hit(p.damage, p.velocity, p.knockback, events_);
+            p.lastHit = e.id();
+            if (p.pierce > 0) {
+                --p.pierce;
+            } else {
+                p.alive = false;
+                break;
+            }
+        }
+    }
+}
+
+void Game::handleEvents()
+{
+    for (const Event& ev : events_) {
+        switch (ev.type) {
+        case EventType::Shot: {
+            const int weapon = static_cast<int>(ev.value);
+            audio_.play(kShotSounds[weapon], 0.55f, 0.06f);
+            cameraRig_.shake(arsenal_.stats().shake);
+            break;
+        }
+        case EventType::DryFire:
+            audio_.play("dry_fire", 0.5f);
+            break;
+        case EventType::ReloadStart:
+            audio_.play("reload", 0.6f);
+            break;
+        case EventType::EnemyHit:
+            audio_.playAt("hit_flesh", ev.position, 0.55f, 0.15f);
+            hud_.addDamageNumber(Vector3Add(ev.position, {0.0f, 0.8f, 0.0f}), ev.value, kDamageColor);
+            break;
+        case EventType::EnemyKilled:
+            audio_.playAt("body_fall", ev.position, 0.7f);
+            score_ += static_cast<int>(ev.value);
+            ++kills_;
+            hitStop_ = std::max(hitStop_, kKillHitStop);
+            cameraRig_.shake(kKillShake);
+            break;
+        case EventType::EnemyAttack:
+            audio_.playAt("zombie_attack", ev.position, 0.8f);
+            break;
+        case EventType::EnemyGroan:
+            audio_.playAt(static_cast<EnemyType>(static_cast<int>(ev.value)) == EnemyType::Runner ? "zombie_runner"
+                                                                                                   : "zombie_groan",
+                          ev.position, 0.5f, 0.12f);
+            break;
+        case EventType::PlayerHurt:
+            audio_.play("hit_heavy", 0.9f);
+            cameraRig_.shake(kHurtShake);
+            hud_.addDamageNumber(Vector3Add(ev.position, {0.0f, 2.0f, 0.0f}), ev.value, kPlayerDamageColor);
+            break;
+        case EventType::PlayerDied:
+            cameraRig_.shake(kDeathShake);
+            break;
+        case EventType::WaveStarted:
+            audio_.play("wave_bell", 0.8f, 0.0f);
+            hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
+            break;
+        case EventType::WaveCleared:
+            audio_.play("ui_confirm", 0.7f, 0.0f);
+            hud_.announce("VAGUE TERMINEE", waves_->allWavesCleared() ? "L'aube se leve..." : "Reprends ton souffle",
+                          kClearColor);
+            break;
+        }
+    }
+    events_.clear();
+}
+
+void Game::updateFootsteps(float dt)
+{
+    if (player_->isDead()) return;
+    const bool moving = IsKeyDown(KEY_W) || IsKeyDown(KEY_A) || IsKeyDown(KEY_S) || IsKeyDown(KEY_D) ||
+                        IsKeyDown(KEY_UP) || IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT);
+    if (!moving) {
+        footstepTimer_ = 0.0f;
+        return;
+    }
+    footstepTimer_ -= dt;
+    if (footstepTimer_ <= 0.0f) {
+        const bool sprint = IsKeyDown(KEY_LEFT_SHIFT) && player_->stamina() > 0.0f;
+        footstepTimer_ = sprint ? kSprintFootstepInterval : kFootstepInterval;
+        audio_.play("footstep", 0.25f, 0.1f);
+    }
+}
+
+HudData Game::hudData() const
+{
+    HudData d;
+    d.health = player_->health();
+    d.maxHealth = player_->maxHealth();
+    d.stamina = player_->stamina();
+    const WeaponStats& weapon = arsenal_.stats();
+    d.weaponName = weapon.name;
+    d.magazine = arsenal_.ammoInMagazine();
+    d.magazineSize = weapon.magazine;
+    d.reserve = arsenal_.reserve();
+    d.infiniteReserve = weapon.infiniteReserve;
+    d.reloading = arsenal_.isReloading();
+    d.reloadProgress = arsenal_.reloadProgress();
+    d.wave = waves_->wave();
+    d.intermission = waves_->phase() == WaveManager::Phase::Intermission;
+    d.intermissionLeft = waves_->intermissionLeft();
+    d.remaining = waves_->remaining();
+    d.score = score_;
+    d.kills = kills_;
+    d.hurtFlash = player_->hurtFlash();
+    return d;
 }
 
 void Game::draw() const
@@ -104,18 +411,25 @@ void Game::draw() const
     if (state_ == State::Menu) {
         drawMenu();
     } else {
-        BeginMode3D(cameraRig_.camera());
-        world_.draw();
-        player_->draw();
-        DrawCircle3D(Vector3Add(mouseGroundPoint(), {0.0f, 0.02f, 0.0f}), 0.25f, {1.0f, 0.0f, 0.0f}, 90.0f,
-                     {255, 220, 120, 160});
-        EndMode3D();
-
+        drawWorld();
+        hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Paused) drawPauseOverlay();
+        if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
+        if (state_ == State::Victory) drawEndScreen("L'AUBE SE LEVE", {255, 210, 120, 255});
     }
 
     DrawFPS(10, 10);
     EndDrawing();
+}
+
+void Game::drawWorld() const
+{
+    BeginMode3D(cameraRig_.camera());
+    world_.draw();
+    waves_->draw();
+    player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
+    projectiles_.draw();
+    EndMode3D();
 }
 
 void Game::drawMenu() const
@@ -123,9 +437,14 @@ void Game::drawMenu() const
     const int w = GetScreenWidth();
     const int h = GetScreenHeight();
     const char* title = "LAST LIGHT";
+    DrawText(title, (w - MeasureText(title, 96)) / 2, h / 4, 96, {230, 200, 120, 255});
+    const char* tagline = "Les morts craignent la lumiere. Tiens jusqu'a l'aube.";
+    DrawText(tagline, (w - MeasureText(tagline, 22)) / 2, h / 4 + 110, 22, {180, 170, 150, 255});
     const char* hint = "Entree pour commencer";
-    DrawText(title, (w - MeasureText(title, 80)) / 2, h / 3, 80, {230, 200, 120, 255});
-    DrawText(hint, (w - MeasureText(hint, 24)) / 2, h / 3 + 110, 24, LIGHTGRAY);
+    DrawText(hint, (w - MeasureText(hint, 28)) / 2, h / 2 + 20, 28, RAYWHITE);
+    const char* controls = "ZQSD : bouger   Maj : sprint   Souris : viser / tirer   R : recharger   1-4 : armes";
+    DrawText(controls, (w - MeasureText(controls, 18)) / 2, h - 60, 18, {140, 135, 125, 255});
+    DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
 }
 
 void Game::drawPauseOverlay() const
@@ -137,4 +456,16 @@ void Game::drawPauseOverlay() const
     const char* hint = "Echap : reprendre   Ctrl+Q : menu";
     DrawText(text, (w - MeasureText(text, 60)) / 2, h / 2 - 60, 60, RAYWHITE);
     DrawText(hint, (w - MeasureText(hint, 20)) / 2, h / 2 + 10, 20, LIGHTGRAY);
+}
+
+void Game::drawEndScreen(const char* title, Color color) const
+{
+    const int w = GetScreenWidth();
+    const int h = GetScreenHeight();
+    DrawRectangle(0, 0, w, h, {0, 0, 0, 170});
+    DrawText(title, (w - MeasureText(title, 80)) / 2, h / 3, 80, color);
+    const char* stats = TextFormat("Vague %d   -   %d morts   -   score %d", waves_->wave(), kills_, score_);
+    DrawText(stats, (w - MeasureText(stats, 26)) / 2, h / 3 + 110, 26, RAYWHITE);
+    const char* hint = "Entree : rejouer   Echap : menu";
+    DrawText(hint, (w - MeasureText(hint, 22)) / 2, h / 3 + 170, 22, LIGHTGRAY);
 }
