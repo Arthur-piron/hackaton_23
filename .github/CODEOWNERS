@@ -1,2 +1,3 @@
-# Le leader doit approuver toute PR vers main.
-* @Arthur-piron
+# Chaque PR vers main doit être approuvée par un autre membre de l'équipe.
+# Ajouter ici le pseudo GitHub du 3e membre.
+* @Arthur-piron @T3a1
