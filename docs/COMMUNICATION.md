@@ -37,3 +37,4 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`.
 | Date | Qui | Quoi |
 |---|---|---|
 | 2026-10-23 | Arthur | Mise en place du repo : règles, consignes Claude, permissions, workflow @claude, template de PR. |
+| 2026-10-23 | Arthur | Ajout de docs/PROMPT-LEANDRE.md : prompts de démarrage pour le Claude de Léandre. |
