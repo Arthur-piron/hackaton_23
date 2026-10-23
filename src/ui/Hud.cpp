@@ -17,6 +17,16 @@ constexpr Color kStamina = {230, 200, 90, 255};
 constexpr Color kText = {235, 230, 215, 255};
 constexpr Color kDim = {150, 145, 135, 255};
 constexpr Color kGold = {255, 205, 90, 255};
+constexpr Color kGoldDark = {170, 110, 20, 255};
+constexpr Color kXp = {70, 225, 190, 255};
+constexpr Color kXpBack = {20, 55, 50, 255};
+// Couleur du combo selon le multiplicateur (×1 à ×5).
+constexpr Color kComboColors[] = {
+    {235, 225, 200, 255}, {255, 205, 90, 255}, {255, 160, 50, 255}, {255, 95, 40, 255}, {255, 50, 90, 255},
+};
+constexpr float kGoldPulseDecay = 4.0f;
+constexpr float kComboPulseDecay = 5.0f;
+constexpr int kComboMinShown = 2; // une mort isolée n'affiche pas de combo
 
 void drawTextCentered(const char* text, int cx, int y, int size, Color color)
 {
@@ -33,6 +43,9 @@ void drawTextShadow(const char* text, int x, int y, int size, Color color)
 void Hud::update(float dt)
 {
     announceAge_ += dt;
+    time_ += dt;
+    goldPulse_ = std::max(0.0f, goldPulse_ - kGoldPulseDecay * dt);
+    comboPulse_ = std::max(0.0f, comboPulse_ - kComboPulseDecay * dt);
     for (FloatingText& n : numbers_) {
         n.age += dt;
         n.position.y += kNumberRise * dt;
@@ -46,6 +59,8 @@ void Hud::clear()
 {
     numbers_.clear();
     announceAge_ = 999.0f;
+    goldPulse_ = 0.0f;
+    comboPulse_ = 0.0f;
 }
 
 void Hud::announce(const std::string& title, const std::string& subtitle, Color color)
@@ -86,6 +101,8 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
     drawBars(data);
     drawAmmo(data);
     drawWave(data);
+    drawEconomy(data);
+    drawCombo(data);
     drawAnnouncement();
     drawCrosshair();
 }
@@ -145,6 +162,62 @@ void Hud::drawWave(const HudData& data) const
     drawTextShadow(score, GetScreenWidth() - kMargin - MeasureText(score, 36), 14, 36, kGold);
     const char* kills = TextFormat("%d tues", data.kills);
     DrawText(kills, GetScreenWidth() - kMargin - MeasureText(kills, 18), 54, 18, kDim);
+}
+
+void Hud::drawEconomy(const HudData& data) const
+{
+    // Sous le compteur de FPS : or, puis niveau et barre d'XP.
+    const int x = 12;
+    const int y = 38;
+    DrawRectangleRounded({static_cast<float>(x), static_cast<float>(y), 236.0f, 74.0f}, 0.2f, 6, kPanel);
+
+    const int coinX = x + 24;
+    const int coinY = y + 22;
+    const float coinRadius = 12.0f * (1.0f + 0.25f * goldPulse_);
+    DrawCircle(coinX, coinY, coinRadius, kGoldDark);
+    DrawCircle(coinX, coinY, coinRadius - 2.0f, kGold);
+    DrawCircleLines(coinX, coinY, coinRadius * 0.55f, kGoldDark);
+    DrawCircle(coinX - 4, coinY - 4, 2.5f, {255, 245, 200, 220});
+
+    const int goldSize = static_cast<int>(30 * (1.0f + 0.15f * goldPulse_));
+    Color goldColor = kGold;
+    goldColor.g = static_cast<unsigned char>(goldColor.g + (255 - goldColor.g) * goldPulse_);
+    goldColor.b = static_cast<unsigned char>(goldColor.b + (255 - goldColor.b) * goldPulse_);
+    drawTextShadow(TextFormat("%d", data.gold), coinX + 22, coinY - goldSize / 2, goldSize, goldColor);
+
+    const int barY = y + 52;
+    const char* level = TextFormat("NIV %d", data.level);
+    DrawText(level, x + 12, barY - 5, 18, kXp);
+    const int barX = x + 22 + MeasureText(level, 18);
+    const int barWidth = x + 236 - 14 - barX;
+    DrawRectangle(barX, barY, barWidth, 8, kXpBack);
+    DrawRectangle(barX, barY, static_cast<int>(barWidth * std::clamp(data.xpProgress, 0.0f, 1.0f)), 8, kXp);
+}
+
+void Hud::drawCombo(const HudData& data) const
+{
+    if (data.combo < kComboMinShown) return;
+    // Sous le score, aligné à droite : grand multiplicateur qui pulse, compteur et jauge du temps restant.
+    const int right = GetScreenWidth() - kMargin;
+    const int y = 84;
+    const int tier = std::clamp(data.comboMultiplier, 1, 5) - 1;
+    const Color color = kComboColors[tier];
+
+    const float beat = 0.04f * std::sin(time_ * (8.0f + 3.0f * static_cast<float>(tier)));
+    const int size = static_cast<int>((52 + 6 * tier) * (1.0f + 0.35f * comboPulse_ + beat));
+    const char* multiplier = TextFormat("x%d", data.comboMultiplier);
+    const int boxHeight = 52 + 6 * 4;
+    drawTextShadow(multiplier, right - MeasureText(multiplier, size), y + (boxHeight - size) / 2, size, color);
+
+    const char* count = TextFormat("COMBO %d", data.combo);
+    const int infoY = y + boxHeight + 4;
+    DrawText(count, right - MeasureText(count, 18), infoY, 18, kText);
+
+    const int gaugeWidth = 140;
+    const int gaugeY = infoY + 24;
+    DrawRectangle(right - gaugeWidth, gaugeY, gaugeWidth, 6, {40, 35, 25, 220});
+    const int filled = static_cast<int>(gaugeWidth * std::clamp(data.comboTimeLeft, 0.0f, 1.0f));
+    DrawRectangle(right - filled, gaugeY, filled, 6, color);
 }
 
 void Hud::drawAnnouncement() const
