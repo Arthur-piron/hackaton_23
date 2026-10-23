@@ -13,19 +13,29 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git stash:*)",
+      "Bash(git restore:*)",
       "Bash(git rebase origin/main)",
+      "Bash(git rebase --continue)",
+      "Bash(git rebase --abort)",
       "Bash(git push -u origin feature/*)",
       "Bash(git push origin feature/*)",
+      "Bash(cmake:*)",
+      "Bash(ctest:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh pr checks:*)",
+      "Bash(gh pr checkout:*)",
       "Bash(gh pr comment:*)",
+      "Bash(gh pr review:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr ready:*)",
       "Bash(gh issue list:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue create:*)",
-      "Bash(gh issue comment:*)"
+      "Bash(gh issue comment:*)",
+      "Bash(gh api repos/Arthur-piron/hackaton_23/*)"
     ],
     "deny": [
       "Bash(git push origin main:*)",
@@ -34,7 +44,7 @@
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)",
       "Bash(git merge:*)",
-      "Bash(gh pr merge:*)",
+      "Bash(gh pr merge --admin:*)",
       "Bash(gh repo delete:*)"
     ]
   }
