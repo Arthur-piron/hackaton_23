@@ -39,6 +39,9 @@ Panne générale, la nuit. Tu es le dernier survivant d'un quartier envahi. **Le
 ## Choix techniques
 
 - C++17, raylib 5.5 récupérée par CMake (`FetchContent`), liée en statique → un seul `.exe`.
+  - Utiliser l'archive, **pas le dépôt git** (le clone échoue sous Windows à cause des chemins trop longs) :
+    `FetchContent_Declare(raylib URL https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz DOWNLOAD_EXTRACT_TIMESTAMP TRUE)`
+  - Testé sous Windows avec CMake 4.4 + Visual Studio Build Tools 2022 : `cmake -S . -B build && cmake --build build --config Release`.
 - Pas de moteur maison : des classes simples appelées depuis la boucle de `main.cpp`.
 - Collisions : boîtes et sphères raylib (`CheckCollisionBoxes`, `GetRayCollision*`). Pas de moteur physique.
 - **Graphismes : d'abord des primitives raylib** (cubes, cylindres, sphères, style low-poly). Les modèles `.glb` (Quaternius, Kenney, CC0) viennent en bonus et vont dans `assets/`.
