@@ -7,7 +7,7 @@ Source de vérité partagée par les trois Claude. Chacun le lit au démarrage e
 | Membre | GitHub | Rôle |
 |---|---|---|
 | Arthur | @Arthur-piron | Leader |
-| Léandre | @? | Membre |
+| Léandre | @T3a1 | Membre |
 | ? | @? | Membre |
 
 ## Leader
@@ -18,7 +18,7 @@ Source de vérité partagée par les trois Claude. Chacun le lit au démarrage e
 
 | Tâche | Branche | Responsable | Statut |
 |---|---|---|---|
-| | | | |
+| Onboarding de Léandre | `feature/onboarding-leandre` | Léandre (@T3a1) | PR ouverte |
 
 Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`.
 
@@ -37,4 +37,5 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`.
 | Date | Qui | Quoi |
 |---|---|---|
 | 2026-10-23 | Arthur | Mise en place du repo : règles, consignes Claude, permissions, workflow @claude, template de PR. |
+| 2026-10-23 | Léandre | Onboarding : pseudo GitHub @T3a1 ajouté dans « Membres ». |
 | 2026-10-23 | Arthur | Ajout de docs/PROMPT-LEANDRE.md : prompts de démarrage pour le Claude de Léandre. |
