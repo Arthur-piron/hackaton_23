@@ -4,7 +4,7 @@
 
 namespace {
 // Décalage de la caméra par rapport au point suivi : haut et un peu en arrière.
-constexpr Vector3 kOffset = {0.0f, 16.0f, 10.0f};
+constexpr Vector3 kOffset = {0.0f, 10.5f, 9.5f};
 constexpr float kFovY = 45.0f;
 constexpr float kFollowSharpness = 8.0f;
 }
