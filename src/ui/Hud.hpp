@@ -24,6 +24,12 @@ struct HudData {
     int score = 0;
     int kills = 0;
     float hurtFlash = 0.0f;
+    int gold = 0;
+    int level = 1;
+    float xpProgress = 0.0f;
+    int combo = 0;
+    int comboMultiplier = 1;
+    float comboTimeLeft = 0.0f; // fraction 0..1 de la fenêtre du combo
 };
 
 // Interface en jeu : barres, munitions, vague, messages, chiffres de dégâts.
@@ -35,6 +41,9 @@ public:
     // Grand message central (« VAGUE 3 », « VAGUE TERMINÉE »...).
     void announce(const std::string& title, const std::string& subtitle, Color color);
     void addDamageNumber(Vector3 position, float value, Color color);
+    // Petits sursauts visuels du compteur d'or et du combo.
+    void pulseGold() { goldPulse_ = 1.0f; }
+    void pulseCombo() { comboPulse_ = 1.0f; }
     void clear();
 
 private:
@@ -49,6 +58,8 @@ private:
     void drawAmmo(const HudData& data) const;
     void drawWave(const HudData& data) const;
     void drawAnnouncement() const;
+    void drawEconomy(const HudData& data) const;
+    void drawCombo(const HudData& data) const;
     void drawCrosshair() const;
 
     std::vector<FloatingText> numbers_;
@@ -56,4 +67,7 @@ private:
     std::string subtitle_;
     Color titleColor_ = WHITE;
     float announceAge_ = 999.0f;
+    float goldPulse_ = 0.0f;
+    float comboPulse_ = 0.0f;
+    float time_ = 0.0f;
 };

@@ -19,6 +19,9 @@ enum class EventType {
     PlayerDied,
     WaveStarted,   // value = numéro de vague
     WaveCleared,   // value = numéro de vague
+    GoldPicked,    // value = or ramassé
+    XpPicked,      // value = XP ramassée
+    LevelUp,       // value = nouveau niveau
 };
 
 struct Event {
