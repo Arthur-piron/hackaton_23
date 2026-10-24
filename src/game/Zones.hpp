@@ -34,6 +34,8 @@ public:
 
     // Emprise au sol (x, z, largeur, profondeur) de chaque zone ouverte.
     std::vector<Rectangle> openAreas() const;
+    // Rectangle (x, z, largeur, profondeur) qui englobe toutes les zones.
+    Rectangle bounds() const;
     // Centres des grilles (on ne construit pas devant).
     std::vector<Vector3> gateCenters() const;
     // Points d'apparition des zones ouvertes.

@@ -33,6 +33,8 @@ public:
     Vector3 resolveCircle(Vector3 position, float radius, unsigned mask = kBlocksEnemies) const;
     // Vrai si le segment [a, b] traverse un obstacle qui arrête `mask` ; hit = premier point touché.
     bool segmentBlocked(Vector3 a, Vector3 b, Vector3& hit, unsigned mask = kBlocksBullets) const;
+    // Boîtes des obstacles actifs qui arrêtent `mask` (navigation des morts).
+    std::vector<BoundingBox> blockerBoxes(unsigned mask) const;
     // Vrai si l'emprise au sol (plan XZ) touche un obstacle actif, quel qu'il soit.
     bool areaBlocked(BoundingBox area) const;
 

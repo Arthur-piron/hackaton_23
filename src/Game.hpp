@@ -13,6 +13,7 @@
 #include "game/Crates.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
+#include "game/FlowField.hpp"
 #include "game/Flashlight.hpp"
 #include "game/FlyingLanterns.hpp"
 #include "game/Merchant.hpp"
@@ -148,6 +149,8 @@ private:
     std::unique_ptr<Structures> structures_; // référence world_ : détruit avant lui
     BuildMode buildMode_;
     BuildBar buildBar_;
+    FlowField flowField_;        // navigation des morts, recalculée toutes les kFlowFieldInterval
+    float flowFieldTimer_ = 0.0f;
     std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;

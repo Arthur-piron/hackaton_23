@@ -41,6 +41,8 @@ enum class EventType {
     BuildDenied,        // pose refusée, ou mode construction hors des pauses
     StructurePlaced,    // value = StructureKind
     StructureRemoved,   // revente ou annulation
+    StructureDamaged,   // un mort frappe une structure ; value = StructureKind
+    StructureDestroyed, // value = StructureKind
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

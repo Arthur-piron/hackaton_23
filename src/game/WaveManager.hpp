@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+class FlowField;
 class World;
 class Zones;
 
@@ -39,6 +40,8 @@ public:
     void setLights(std::vector<PointLight> lights) { lights_ = std::move(lights); }
     // Lampe torche du joueur, à rappeler à chaque image : les vampires fuient son cône.
     void setFlashlight(bool on, Vector3 origin, Vector3 direction);
+    // Navigation par champ de distances (base v3) ; sans lui, les morts passent par les grilles (Zones::steer).
+    void setFlowField(const FlowField* field) { flowField_ = field; }
     // Fait apparaître un cercle d'ennemis autour d'un point (tests automatiques).
     void spawnRing(Vector3 center, float radius, int count, EnemyType type);
     // Règles du mode de jeu : endless = pas de victoire à la vague 10 ; vie des morts multipliée.
@@ -62,11 +65,14 @@ private:
     void separate(float dt);
     // Collisions avec le décor, et contournement quand un mort bute de face sur un obstacle.
     void collide(float dt, Vector3 playerPosition, const World& world, const Zones& zones);
+    // Où marcher pour rejoindre le joueur : FlowField s'il y en a un, sinon Zones::steer.
+    Vector3 route(Vector3 from, Vector3 playerPosition, const Zones& zones) const;
 
     std::array<std::shared_ptr<AnimatedModel>, static_cast<size_t>(EnemyType::Count)> models_;
     std::vector<Enemy> enemies_;
     std::vector<PointLight> lights_;
     bool flashlightOn_ = false;
+    const FlowField* flowField_ = nullptr;
     Vector3 flashlightOrigin_ = {0.0f, 0.0f, 0.0f};
     Vector3 flashlightDirection_ = {0.0f, 0.0f, 1.0f};
     Phase phase_ = Phase::Intermission;
