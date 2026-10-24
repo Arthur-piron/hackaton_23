@@ -30,10 +30,9 @@ add_executable(lastlight ${LASTLIGHT_SOURCES})
 
 # ${raylib_SOURCE_DIR}/src donne accès à raymath.h, rlgl.h et external/cgltf.h
 # (les symboles cgltf sont déjà compilés dans la lib raylib).
-target_include_directories(lastlight PRIVATE
-    "${CMAKE_SOURCE_DIR}/src"
-    "${raylib_SOURCE_DIR}/src"
-)
+target_include_directories(lastlight PRIVATE "${CMAKE_SOURCE_DIR}/src")
+# En SYSTEM : les avertissements des en-têtes de raylib (raymath.h) ne polluent pas notre build.
+target_include_directories(lastlight SYSTEM PRIVATE "${raylib_SOURCE_DIR}/src")
 target_link_libraries(lastlight PRIVATE raylib)
 
 if(MSVC)
