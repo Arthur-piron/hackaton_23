@@ -37,6 +37,8 @@ target_link_libraries(lastlight PRIVATE raylib)
 
 if(MSVC)
     target_compile_options(lastlight PRIVATE /W4 /permissive- /utf-8)
+    # getenv (dossier utilisateur de la sauvegarde) est standard : pas de variante _s propre à MSVC.
+    target_compile_definitions(lastlight PRIVATE _CRT_SECURE_NO_WARNINGS)
     # Pas de console en Release, mais main() reste le point d'entrée.
     set_target_properties(lastlight PROPERTIES WIN32_EXECUTABLE $<CONFIG:Release>)
     target_link_options(lastlight PRIVATE $<$<CONFIG:Release>:/ENTRY:mainCRTStartup>)

@@ -80,11 +80,13 @@ const std::vector<CardInfo>& buildCatalog()
     return cards;
 }
 
-CardRarity rollRarity()
+// bonusPercent (talent Chance) s'ajoute aux chances légendaire et rare.
+CardRarity rollRarity(int bonusPercent)
 {
     const int roll = GetRandomValue(1, 100);
-    if (roll <= kLegendaryChance) return CardRarity::Legendary;
-    if (roll <= kLegendaryChance + kRareChance) return CardRarity::Rare;
+    const int legendary = kLegendaryChance + bonusPercent;
+    if (roll <= legendary) return CardRarity::Legendary;
+    if (roll <= legendary + kRareChance + bonusPercent) return CardRarity::Rare;
     return CardRarity::Common;
 }
 }
@@ -122,7 +124,7 @@ std::vector<CardId> Cards::drawChoices(int count) const
     std::vector<CardId> choices;
     while (static_cast<int>(choices.size()) < count && !pool.empty()) {
         // On tire d'abord une rareté ; si plus aucune carte de cette rareté n'est disponible, n'importe laquelle.
-        const CardRarity rarity = rollRarity();
+        const CardRarity rarity = rollRarity(rarityBonus_);
         std::vector<size_t> matching;
         for (size_t i = 0; i < pool.size(); ++i) {
             if (info(pool[i]).rarity == rarity) matching.push_back(i);
