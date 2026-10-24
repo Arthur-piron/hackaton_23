@@ -37,13 +37,18 @@ jobs:
       # plantages au chargement des assets et des shaders.
       - name: Test automatique (--smoke)
         working-directory: build
-        run: xvfb-run -a -s "-screen 0 1280x720x24" ./lastlight --smoke 180 smoke-linux.png
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" ./lastlight --smoke 180 smoke-linux.png
+          # Moins de 80 images : la partie est capturée avant l'écran des cartes de fin de test.
+          xvfb-run -a -s "-screen 0 1280x720x24" ./lastlight --smoke 78 smoke-gameplay.png
 
       - name: Capture d'écran
         uses: actions/upload-artifact@v4
         with:
           name: smoke-linux
-          path: build/smoke-linux.png
+          path: |
+            build/smoke-linux.png
+            build/smoke-gameplay.png
           if-no-files-found: warn
 
       - name: Exécutable Linux
