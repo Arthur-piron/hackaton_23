@@ -8,6 +8,15 @@
 #include <unordered_map>
 #include <vector>
 
+// Ce qu'un obstacle arrête (combinables) : le décor arrête tout, une barricade laisse passer
+// les balles, une porte laisse passer le joueur.
+enum BlockMask : unsigned {
+    kBlocksPlayer = 1u,
+    kBlocksEnemies = 2u,
+    kBlocksBullets = 4u,
+    kBlocksAll = kBlocksPlayer | kBlocksEnemies | kBlocksBullets,
+};
+
 // La carte du cimetière : sol, décor Kenney et collisions du décor solide.
 // Les modèles sont chargés une seule fois par fichier. À créer après
 // InitWindow et à détruire avant CloseWindow.
@@ -20,10 +29,12 @@ public:
 
     void draw(const Camera3D& camera) const;
 
-    // Repousse un cercle (plan XZ) hors du décor solide : il glisse le long des obstacles.
-    Vector3 resolveCircle(Vector3 position, float radius) const;
-    // Vrai si le segment [a, b] traverse le décor solide ; hit = premier point touché.
-    bool segmentBlocked(Vector3 a, Vector3 b, Vector3& hit) const;
+    // Repousse un cercle (plan XZ) hors des obstacles qui arrêtent `mask` : il glisse le long d'eux.
+    Vector3 resolveCircle(Vector3 position, float radius, unsigned mask = kBlocksEnemies) const;
+    // Vrai si le segment [a, b] traverse un obstacle qui arrête `mask` ; hit = premier point touché.
+    bool segmentBlocked(Vector3 a, Vector3 b, Vector3& hit, unsigned mask = kBlocksBullets) const;
+    // Vrai si l'emprise au sol (plan XZ) touche un obstacle actif, quel qu'il soit.
+    bool areaBlocked(BoundingBox area) const;
 
     Vector3 playerSpawn() const { return playerSpawn_; }
     // Lumières des décors éclairants (lampadaires, braseros, lanternes, bougies...).
@@ -40,10 +51,11 @@ public:
     static Vector3 centeredPosition(const Model& model, Vector3 center, float yaw, Vector3 scale);
 
     // Obstacles ajoutés par d'autres systèmes (grilles...), activables à la volée.
-    int addBlocker(BoundingBox box);
+    int addBlocker(BoundingBox box, unsigned mask = kBlocksAll);
     void setBlockerActive(int id, bool active);
     // Déplace un obstacle (caisses qui apparaissent ailleurs).
     void moveBlocker(int id, BoundingBox box);
+    void setBlockerMask(int id, unsigned mask);
 
 private:
     struct Placed {
@@ -55,6 +67,7 @@ private:
     struct Blocker {
         BoundingBox box;
         bool active;
+        unsigned mask;
     };
 
     void addProp(const PropDef& prop);
