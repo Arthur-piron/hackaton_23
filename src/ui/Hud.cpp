@@ -91,7 +91,7 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
     if (data.hurtFlash > 0.0f) {
         const int w = GetScreenWidth();
         const int h = GetScreenHeight();
-        const unsigned char a = static_cast<unsigned char>(110 * data.hurtFlash);
+        const unsigned char a = static_cast<unsigned char>(55 * data.hurtFlash); // le post-traitement ajoute déjà sa teinte
         DrawRectangleGradientV(0, 0, w, h / 4, {160, 0, 0, a}, {160, 0, 0, 0});
         DrawRectangleGradientV(0, h * 3 / 4, w, h / 4, {160, 0, 0, 0}, {160, 0, 0, a});
         DrawRectangleGradientH(0, 0, w / 5, h, {160, 0, 0, a}, {160, 0, 0, 0});
