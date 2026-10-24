@@ -14,6 +14,7 @@
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
 #include "game/FlowField.hpp"
+#include "game/Generator.hpp"
 #include "game/Flashlight.hpp"
 #include "game/FlyingLanterns.hpp"
 #include "game/Merchant.hpp"
@@ -166,6 +167,7 @@ private:
     BuildMode buildMode_;
     BuildBar buildBar_;
     Traps traps_;
+    Generator generator_;
     std::unique_ptr<Turrets> turrets_; // modèles partagés avec world_
     FlowField flowField_;        // navigation des morts, recalculée toutes les kFlowFieldInterval
     float flowFieldTimer_ = 0.0f;

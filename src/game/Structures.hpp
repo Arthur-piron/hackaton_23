@@ -12,7 +12,10 @@ class World;
 // Catégories du mode construction (docs/GAME.md §7.2), dans l'ordre des touches 1 à 4.
 enum class BuildCategory { Defenses, Turrets, Traps, Utilities, Count };
 
-enum class StructureKind { Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, Count };
+enum class StructureKind {
+    Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, MachineGun, Generator, Lamppost,
+    FlameThrower, Projector, Workbench, Count
+};
 
 // Description d'une structure du catalogue (GAME.md §7.3).
 struct StructureInfo {
@@ -28,6 +31,7 @@ struct StructureInfo {
     const char* model; // relatif à assets/models/ ; nul : dessiné par Traps
     Color tint;
     int uses;          // pièges : passages ou prises avant de s'user (0 : sans objet)
+    bool electric;     // ne marche que près d'un générateur qui a du carburant
 };
 
 // État d'un piège posé, mis à jour par Traps.
@@ -42,6 +46,8 @@ struct TrapState {
 struct TurretState {
     float cooldown = 0.0f;
     float yaw = 0.0f; // orientation de l'arme, en radians
+    float fuel = 0.0f; // générateur : bidons dans le réservoir
+    bool firing = false; // lance-flammes : crache du feu pendant cette image
 };
 
 // Les structures posées par le joueur : collision dans World, rendu (fissurée, en ruine),
@@ -53,6 +59,11 @@ public:
     static BoundingBox footprint(StructureKind kind, Vector3 center, bool rotated);
     // Dégâts par seconde d'un mort qui frappe une structure.
     static float damagePerSecond(EnemyType type);
+
+    // Améliorations à l'établi (GAME.md §7.3) : niveaux 1 à 3.
+    static constexpr int kMaxLevel = 3;
+    // Multiplicateur des dégâts des tourelles et des pièges selon le niveau.
+    static float damageMultiplier(int level);
 
     // world doit survivre aux structures : elles y enregistrent leurs collisions et leurs modèles.
     explicit Structures(World& world);
@@ -68,10 +79,15 @@ public:
     bool exists(int id) const;
     StructureKind kind(int id) const { return items_[static_cast<size_t>(id)].kind; }
     float health(int id) const { return items_[static_cast<size_t>(id)].health; }
+    float maxHealth(int id) const;
+    int level(int id) const { return items_[static_cast<size_t>(id)].level; }
+    // Monte d'un niveau : PV max (les PV perdus restent perdus), utilisations des pièges.
+    void upgrade(int id);
     float healthFraction(int id) const;
     BoundingBox bounds(int id) const;
     std::vector<int> ids() const;
     int countIn(BuildCategory category) const;
+    int countOf(StructureKind kind) const;
     Vector3 center(int id) const { return items_[static_cast<size_t>(id)].center; }
     TrapState& trap(int id) { return items_[static_cast<size_t>(id)].trap; }
     const TrapState& trap(int id) const { return items_[static_cast<size_t>(id)].trap; }
@@ -104,10 +120,17 @@ private:
         float shake = 0.0f;
         TrapState trap;
         TurretState turret;
+        int level = 1;
     };
+
+    // Modèle d'une structure posée (l'établi niv. II a son propre modèle).
+    const Model* modelOf(const Item& item) const;
+    void drawWith(const Model& model, float scale, Vector3 center, bool rotated, Color tint, float tilt) const;
 
     World& world_;
     std::vector<const Model*> models_;
     std::vector<float> modelScales_; // l'empreinte la plus longue mesure exactement son nombre de cases
+    const Model* workbenchII_ = nullptr;
+    float workbenchIIScale_ = 1.0f;
     std::vector<Item> items_;        // les identifiants sont des indices ; les emplacements libres sont réutilisés
 };

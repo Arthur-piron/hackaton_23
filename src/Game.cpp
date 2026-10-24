@@ -96,6 +96,7 @@ constexpr float kFlowFieldInterval = 0.25f;
 constexpr float kStructureReach = 0.35f;   // au-delà de son rayon, un mort frappe la structure
 constexpr float kStructureDestroyShake = 0.15f;
 constexpr float kTurretKnockback = 2.0f;
+constexpr Color kUpgradeSparkColor = {255, 205, 90, 255};
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -243,14 +244,27 @@ Game::Game(const Options& options)
             mysteryBox_->interact(mysteryBox_->position(), *zones_, economy_, events_);
         }
         crates_->spawnWave(Crates::kMaxCrates, *zones_, player_->position());
-        // Une palissade, une barricade et une porte devant le joueur.
-        for (int i = 0; i < static_cast<int>(StructureKind::Count); ++i) {
-            structures_->place(static_cast<StructureKind>(i),
-                               Vector3Add(player_->position(), {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
-        }
-        // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
+        // Une palissade, une barricade et une porte devant le joueur ; la palissade est au niveau 2.
         const Vector3 me = player_->position();
-        structures_->place(StructureKind::Crossbow, Vector3Add(me, {-2.5f, 0.0f, 1.5f}), false);
+        const StructureKind defenses[] = {StructureKind::Palisade, StructureKind::Barricade, StructureKind::Door};
+        for (int i = 0; i < 3; ++i) {
+            structures_->place(defenses[i], Vector3Add(me, {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
+        }
+        structures_->upgrade(structures_->at(Vector3Add(me, {2.0f, 0.0f, 2.5f})));
+        // Un établi niv. II et une arbalète au niveau 3.
+        structures_->upgrade(structures_->place(StructureKind::Workbench, Vector3Add(me, {4.0f, 0.0f, 5.5f}), false));
+        const int crossbow = structures_->place(StructureKind::Crossbow, Vector3Add(me, {-2.5f, 0.0f, 1.5f}), false);
+        structures_->upgrade(crossbow);
+        structures_->upgrade(crossbow);
+        // Un générateur avec un bidon alimente une mitrailleuse et un lampadaire.
+        const int generator = structures_->place(StructureKind::Generator, Vector3Add(me, {-5.0f, 0.0f, 3.5f}), false);
+        structures_->turret(generator).fuel = 1.0f;
+        structures_->place(StructureKind::MachineGun, Vector3Add(me, {-4.5f, 0.0f, 1.5f}), false);
+        structures_->place(StructureKind::Lamppost, Vector3Add(me, {-2.5f, 0.0f, -1.5f}), false);
+        structures_->place(StructureKind::FlameThrower, Vector3Add(me, {1.5f, 0.0f, -1.5f}), false);
+        const int projector = structures_->place(StructureKind::Projector, Vector3Add(me, {-1.5f, 0.0f, 0.5f}), false);
+        structures_->turret(projector).yaw = PI; // vers la horde, au nord
+        // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
         structures_->place(StructureKind::Spikes, Vector3Add(me, {-1.5f, 0.0f, -2.5f}), false);
         structures_->place(StructureKind::Mine, Vector3Add(me, {0.5f, 0.0f, -3.5f}), false);
         structures_->place(StructureKind::BearTrap, Vector3Add(me, {1.5f, 0.0f, -2.5f}), false);
@@ -546,6 +560,7 @@ void Game::updateLighting(float dt)
     if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
     if (altar_) lighting_->addLight(altar_->light());
     for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
+    for (const PointLight& lamp : generator_.lights(*structures_)) lighting_->addLight(lamp);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -599,6 +614,11 @@ void Game::updatePlaying(float dt)
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
         } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
             takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
+        } else if (buildMode_.upgradeWorkbenchNear(player_->position(), intermission, *structures_, economy_,
+                                                   events_)) {
+            // E près de l'établi : il passe au niveau II.
+        } else if (generator_.refuelNear(player_->position(), *structures_, economy_, events_)) {
+            // E près d'un générateur : un bidon dans le réservoir.
         } else if (traps_.igniteNear(player_->position(), *structures_)) {
             // E près d'une flaque d'huile : elle s'enflamme.
         } else if (altar_ && altar_->inReach(player_->position())) {
@@ -925,8 +945,17 @@ bool Game::updateBase(float dt, const Controls& c)
     for (const Traps::Blast& blast : trapped.blasts) {
         explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor, true);
     }
-    for (const Turrets::Hit& hit : turrets_->update(dt, *structures_, waves_->enemies(), *world_, events_)) {
-        damageEnemy(*hit.enemy, hit.damage, hit.direction, kTurretKnockback, HitKind::Normal, true);
+    for (const Generator::Burn& burn :
+         generator_.update(dt, waves_->phase() == WaveManager::Phase::Fighting, *structures_, waves_->enemies(),
+                           events_)) {
+        damageEnemy(*burn.enemy, burn.damage, {0.0f, 0.0f, 0.0f}, 0.0f, HitKind::Light, true);
+    }
+    for (const Turrets::Hit& hit :
+         turrets_->update(dt, *structures_, waves_->enemies(), *world_, generator_, events_)) {
+        // Le lance-flammes embrase et ne repousse pas.
+        if (hit.ignite && hit.enemy->isAlive()) cardEffects_.ignite(*hit.enemy);
+        damageEnemy(*hit.enemy, hit.damage, hit.direction, hit.ignite ? 0.0f : kTurretKnockback,
+                    hit.ignite ? HitKind::Burn : HitKind::Normal, true);
     }
     if (player_->isDead()) {
         buildMode_.reset();
@@ -946,6 +975,7 @@ void Game::drawBase() const
     structures_->draw();
     traps_.draw(*structures_);
     turrets_->draw(*structures_);
+    generator_.draw(*structures_);
     buildMode_.drawWorld(*structures_);
 }
 
@@ -1261,7 +1291,23 @@ void Game::handleEvents()
                           ev.position, 0.6f, 0.2f);
             break;
         case EventType::TurretFired:
-            audio_.playAt("reload", ev.position, 0.45f, 0.2f);
+            if (static_cast<StructureKind>(static_cast<int>(ev.value)) == StructureKind::MachineGun) {
+                audio_.playAt("gun_pistol", ev.position, 0.25f, 0.15f);
+            } else {
+                audio_.playAt("reload", ev.position, 0.45f, 0.2f);
+            }
+            break;
+        case EventType::StructureUpgraded:
+            audio_.playAt("ui_confirm", ev.position, 0.8f, 0.0f);
+            particles_->debris(Vector3Add(ev.position, {0.0f, 0.5f, 0.0f}), kUpgradeSparkColor, 10);
+            hud_.pulseResources();
+            break;
+        case EventType::GeneratorRefueled:
+            audio_.playAt("pickup", ev.position, 0.8f, 0.0f);
+            break;
+        case EventType::GeneratorEmpty:
+            audio_.playAt("dry_fire", ev.position, 0.9f, 0.0f);
+            hud_.announce("GÉNÉRATEUR À SEC !", "Verse un bidon (E) pour rallumer les défenses", kWaveColor);
             break;
         case EventType::StructureDamaged:
             audio_.playAt("hit_wood", ev.position, 0.5f, 0.2f);
@@ -1394,6 +1440,7 @@ void Game::draw() const
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Playing) {
             structures_->drawHealthBars(cameraRig_.camera(), player_->position());
+            generator_.drawPrompt(cameraRig_.camera(), player_->position(), *structures_, economy_);
             buildMode_.drawPrompt(cameraRig_.camera());
             buildBar_.draw(buildMode_, economy_);
         }
