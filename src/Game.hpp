@@ -115,7 +115,9 @@ private:
     // Contenu d'une caisse cassée : bois, ferraille, munitions, bidon, ou explosion du tonneau de poudre.
     void breakCrate(const Crates::Broken& crate);
     // Explosion au sol : dégâts et recul aux morts du rayon, au joueur s'il est dedans (playerDamage > 0).
-    void explode(Vector3 center, float radius, float damage, float knockback, float playerDamage, Color color);
+    // byDefense : explosion d'un piège (mort comptée « par une défense »).
+    void explode(Vector3 center, float radius, float damage, float knockback, float playerDamage, Color color,
+                 bool byDefense = false);
     // Base (GAME.md §7) : mode construction et structures. Vrai si le joueur construit (arme rangée).
     bool updateBase(float dt, const Controls& c);
     void drawBase() const;
@@ -199,6 +201,7 @@ private:
 
     int score_ = 0;
     int kills_ = 0;
+    int defenseKills_ = 0; // morts dues aux structures (écran de fin, GAME.md §7.5)
     float hitStop_ = 0.0f;
     float footstepTimer_ = 0.0f;
     float levelUpSlowMo_ = 0.0f;   // ralenti avant l'écran des cartes
