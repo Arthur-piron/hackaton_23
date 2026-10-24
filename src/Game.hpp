@@ -10,6 +10,8 @@
 #include "game/Cards.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
+#include "game/Merchant.hpp"
+#include "game/Shop.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Projectile.hpp"
@@ -19,6 +21,7 @@
 #include "game/Zones.hpp"
 #include "ui/CardPicker.hpp"
 #include "ui/Hud.hpp"
+#include "ui/ShopScreen.hpp"
 
 #include <memory>
 #include <string>
@@ -28,7 +31,7 @@
 // les événements de gameplay (son, caméra, HUD).
 class Game {
 public:
-    enum class State { Menu, Playing, Paused, LevelUp, GameOver, Victory };
+    enum class State { Menu, Playing, Paused, LevelUp, Shop, GameOver, Victory };
 
     struct Options {
         int smokeFrames = 0;         // > 0 : mode test automatique
@@ -82,6 +85,9 @@ private:
     // Tire 3 cartes et passe à l'écran de choix (reste en jeu si plus aucune carte n'est disponible).
     void openCardPicker();
     void updateLevelUp(float dt);
+    // Marchand : ouvert entre les vagues, il fige la pause (au plus kShopMaxFrozen secondes).
+    void openShop();
+    void updateShop(float dt);
     void handleEvents();
     void updateFootsteps(float dt);
     // Lampe torche, lumière d'appoint du joueur et envoi des lumières au shader.
@@ -107,7 +113,10 @@ private:
     std::unique_ptr<World> world_;
     std::unique_ptr<Zones> zones_; // référence world_ : détruit avant lui
     std::unique_ptr<AnimatedModel> keeperModel_;
+    std::unique_ptr<AnimatedModel> merchantModel_;
     std::unique_ptr<Player> player_;
+    std::unique_ptr<Merchant> merchant_; // nul si la carte n'en déclare pas
+    std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;
     std::unique_ptr<Particles> particles_;
@@ -122,6 +131,8 @@ private:
     CameraRig cameraRig_;
     Hud hud_;
     CardPicker cardPicker_;
+    ShopScreen shopScreen_;
+    float shopFrozenLeft_ = 0.0f;  // temps de pause figée restant chez le marchand
     EventQueue events_;
 
     int score_ = 0;

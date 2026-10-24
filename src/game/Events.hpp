@@ -26,6 +26,7 @@ enum class EventType {
     BulletImpact,  // balle arrêtée par le décor ; direction = sens de la balle
     Explosion,     // value = rayon (cadavre nécrotique, flash du Soleil de poche...)
     LastStand,     // le Dernier rempart a sauvé le joueur
+    ItemBought,    // achat chez le marchand ; value = indice de l'article (Shop::catalog)
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

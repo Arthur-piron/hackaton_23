@@ -8,6 +8,11 @@
 namespace {
 constexpr float kProjectileLife = 1.2f;
 
+// Gain de chaque niveau d'amélioration (dans l'ordre de WeaponUpgrade) : dégâts, cadence, chargeur.
+constexpr float kUpgradeSteps[] = {0.20f, 0.12f, 0.30f};
+static_assert(sizeof(kUpgradeSteps) / sizeof(kUpgradeSteps[0]) == static_cast<size_t>(WeaponUpgrade::Count),
+              "un gain par amélioration");
+
 float randomSigned()
 {
     return static_cast<float>(GetRandomValue(-1000, 1000)) / 1000.0f;
@@ -50,6 +55,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
         shotgun.knockback = 4.5f;
         shotgun.shake = 0.45f;
         shotgun.recoil = 3.0f;
+        shotgun.reserveMagazines = 5;
         list.push_back(shotgun);
 
         WeaponStats smg;
@@ -65,6 +71,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
         smg.shake = 0.08f;
         smg.recoil = 0.3f;
         smg.automatic = true;
+        smg.reserveMagazines = 5;
         list.push_back(smg);
 
         WeaponStats rifle;
@@ -80,6 +87,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
         rifle.shake = 0.35f;
         rifle.recoil = 2.0f;
         rifle.pierce = 4;
+        rifle.reserveMagazines = 5;
         list.push_back(rifle);
         return list;
     }();
@@ -103,10 +111,33 @@ void Arsenal::reset()
     timeSinceShot_ = 10.0f;
 }
 
+float Arsenal::upgradeMultiplier(WeaponUpgrade upgrade, int level)
+{
+    return 1.0f + kUpgradeSteps[static_cast<size_t>(upgrade)] * static_cast<float>(level);
+}
+
+float Arsenal::damageOf(int weapon) const
+{
+    return catalog()[static_cast<size_t>(weapon)].damage * modifiers_.damageMultiplier *
+           upgradeOf(weapon, WeaponUpgrade::Damage);
+}
+
+float Arsenal::fireIntervalOf(int weapon) const
+{
+    return catalog()[static_cast<size_t>(weapon)].fireInterval /
+           (modifiers_.fireRateMultiplier * upgradeOf(weapon, WeaponUpgrade::FireRate));
+}
+
 int Arsenal::magazineOf(int weapon) const
 {
     const float size = static_cast<float>(catalog()[static_cast<size_t>(weapon)].magazine);
-    return std::max(1, static_cast<int>(std::lround(size * modifiers_.magazineMultiplier)));
+    const float multiplier = modifiers_.magazineMultiplier * upgradeOf(weapon, WeaponUpgrade::Magazine);
+    return std::max(1, static_cast<int>(std::lround(size * multiplier)));
+}
+
+int Arsenal::maxReserveOf(int weapon) const
+{
+    return magazineOf(weapon) * catalog()[static_cast<size_t>(weapon)].reserveMagazines;
 }
 
 float Arsenal::reloadProgress() const
@@ -142,7 +173,29 @@ void Arsenal::addAmmo(int weapon, int amount)
 
 void Arsenal::unlock(int weapon)
 {
-    if (weapon >= 0 && weapon < static_cast<int>(slots_.size())) slots_[weapon].unlocked = true;
+    if (weapon < 0 || weapon >= static_cast<int>(slots_.size())) return;
+    Slot& slot = slots_[static_cast<size_t>(weapon)];
+    slot.unlocked = true;
+    slot.magazine = magazineOf(weapon);
+    refillReserve(weapon);
+}
+
+void Arsenal::refillReserve(int weapon)
+{
+    if (weapon < 0 || weapon >= static_cast<int>(slots_.size())) return;
+    Slot& slot = slots_[static_cast<size_t>(weapon)];
+    slot.reserve = std::max(slot.reserve, maxReserveOf(weapon));
+}
+
+void Arsenal::upgrade(int weapon, WeaponUpgrade upgrade)
+{
+    if (weapon < 0 || weapon >= static_cast<int>(slots_.size())) return;
+    Slot& slot = slots_[static_cast<size_t>(weapon)];
+    int& level = slot.upgrades[static_cast<size_t>(upgrade)];
+    if (level >= kMaxUpgradeLevel) return;
+    const int before = magazineOf(weapon);
+    ++level;
+    slot.magazine += magazineOf(weapon) - before;
 }
 
 void Arsenal::startReload(EventQueue& events, Vector3 position)
@@ -190,11 +243,12 @@ bool Arsenal::update(float dt, bool fireHeld, bool firePressed, bool reloadPress
 
     // Chargeur sans fond : certains tirs ne consomment pas de balle.
     if (!chance(modifiers_.noAmmoChance)) slot.magazine -= 1;
-    cooldown_ = weapon.fireInterval / modifiers_.fireRateMultiplier;
+    cooldown_ = fireIntervalOf(current_);
     timeSinceShot_ = 0.0f;
     const float baseYaw = std::atan2(forward.x, forward.z);
     const int pellets = weapon.pellets * (modifiers_.doubleShot ? 2 : 1);
     const float spreadDegrees = weapon.spreadDegrees + modifiers_.extraSpreadDegrees;
+    const float damage = damageOf(current_);
     for (int i = 0; i < pellets; ++i) {
         const float spread = spreadDegrees * DEG2RAD * randomSigned();
         const float yaw = baseYaw + spread;
@@ -203,7 +257,7 @@ bool Arsenal::update(float dt, bool fireHeld, bool firePressed, bool reloadPress
         p.position = muzzle;
         p.previous = muzzle;
         p.velocity = {std::sin(yaw) * speed, 0.0f, std::cos(yaw) * speed};
-        p.damage = weapon.damage * modifiers_.damageMultiplier;
+        p.damage = damage;
         p.knockback = weapon.knockback;
         p.life = kProjectileLife;
         p.pierce = weapon.pierce + modifiers_.pierceBonus;

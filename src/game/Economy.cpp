@@ -98,3 +98,10 @@ bool Economy::consumeLevelUp()
     --pendingLevelUps_;
     return true;
 }
+
+bool Economy::useCardReroll()
+{
+    if (cardRerolls_ == 0) return false;
+    --cardRerolls_;
+    return true;
+}

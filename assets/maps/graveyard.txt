@@ -13,6 +13,7 @@
 #   zone    <id> <prix> minX minZ maxX maxZ <nom affiche, sans accents>
 #   gate    <zone> x z rotY   (portail centre sur un trou de 4 m dans le mur, passage de 3 m ; rotY 0 : le long de X, 90 : le long de Z)
 #   spawn   <zone> x z        (point d'apparition des morts, actif quand la zone est ouverte)
+#   merchant x z rotY         (PNJ du marchand, ouvert entre les vagues ; rotY 0 : regarde vers +Z)
 #
 #                     Mausolee  x[-8,8]   z[-38,-26]
 #   Chapelle x[-30,-14] | Allee x[-14,14] z[-26,-8] | Crypte x[14,30]
@@ -121,6 +122,10 @@ prop survival/chest.glb 3.0 -3.1 -20 1.4 solid
 prop survival/box-large.glb 2.9 -6.6 90 1.4 solid
 prop survival/box.glb 2.9 -5.5 10 1.4 solid
 prop graveyard/fire-basket.glb 3.2 -1.6 0 1.4 solid
+# Le marchand, devant la porte de la cabane, derriere son etabli eclaire d'une lanterne
+merchant 4.7 -2.9 0
+prop survival/workbench.glb 4.7 -1.9 0 2 solid
+prop graveyard/lantern-candle.glb 4.25 -1.85 0 0.7 - 0.96
 # Coin atelier au sud-ouest
 prop survival/workbench.glb -5.6 4.6 0 1.6 solid
 prop survival/resource-planks.glb -4.2 4.8 80 1.6 -

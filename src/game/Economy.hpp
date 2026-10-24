@@ -47,6 +47,11 @@ public:
     int pendingLevelUps() const { return pendingLevelUps_; }
     bool consumeLevelUp();
 
+    // Relances de cartes achetées chez le marchand, utilisables aux montées de niveau suivantes.
+    void addCardReroll() { ++cardRerolls_; }
+    bool useCardReroll();
+    int cardRerolls() const { return cardRerolls_; }
+
 private:
     int gold_ = 0;
     int xp_ = 0;
@@ -55,4 +60,5 @@ private:
     int combo_ = 0;
     float comboTimer_ = 0.0f;
     float goldMultiplier_ = 1.0f;
+    int cardRerolls_ = 0;
 };
