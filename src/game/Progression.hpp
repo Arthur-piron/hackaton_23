@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/SaveFile.hpp"
+#include "game/Character.hpp"
 #include "game/GameMode.hpp"
 
 #include <array>
@@ -70,6 +71,14 @@ public:
     // Place obtenue par la dernière partie dans le tableau (0 = première), -1 si elle n'y entre pas.
     int lastRank() const { return lastRank_; }
 
+    // Personnages : achat avec les ossements (le personnage acheté devient le personnage joué).
+    bool owns(CharacterId id) const { return ownedCharacters_[static_cast<size_t>(id)]; }
+    bool canBuy(CharacterId id) const;
+    bool buy(CharacterId id);
+    // Faux si le personnage n'est pas encore acheté.
+    bool select(CharacterId id);
+    CharacterId selectedCharacter() const { return selected_; }
+
     // Effets des talents.
     float startHealthBonus() const;
     int startGold() const;
@@ -89,6 +98,8 @@ private:
     int bestScore_ = 0;
     int victories_ = 0;
     std::array<int, static_cast<size_t>(TalentId::Count)> ranks_{};
+    std::array<bool, static_cast<size_t>(CharacterId::Count)> ownedCharacters_{true}; // le gardien est offert
+    CharacterId selected_ = CharacterId::Keeper;
     std::vector<ScoreEntry> leaderboard_;
     int lastRank_ = -1;
 };

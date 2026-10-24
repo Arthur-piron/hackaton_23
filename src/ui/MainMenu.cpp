@@ -6,13 +6,14 @@
 #include <cmath>
 
 namespace {
-constexpr int kItemCount = 5;
+constexpr int kItemCount = 6; // MainMenu::Item::Count
+constexpr int kCharacterCount = static_cast<int>(CharacterId::Count);
 constexpr float kItemWidth = 380.0f;
-constexpr float kItemHeight = 54.0f;
-constexpr float kItemGap = 10.0f;
-constexpr float kMenuTop = 250.0f;
+constexpr float kItemHeight = 48.0f;
+constexpr float kItemGap = 8.0f;
+constexpr float kMenuTop = 240.0f;
 constexpr float kBoardWidth = 420.0f;
-constexpr float kBoardRowHeight = 30.0f;
+constexpr float kBoardRowHeight = 28.0f;
 constexpr float kColumnGap = 60.0f;
 
 constexpr Color kTitle = {230, 200, 120, 255};
@@ -26,11 +27,19 @@ constexpr Color kLocked = {100, 96, 110, 255};
 constexpr Color kBone = {235, 225, 195, 255};
 constexpr Color kPanel = {14, 13, 20, 220};
 constexpr Color kGold = {255, 205, 90, 255};
+constexpr Color kAffordable = {140, 230, 150, 255};
+constexpr Color kTooExpensive = {220, 90, 80, 255};
 
 void drawCentered(const char* text, float cx, float y, float size, Color color)
 {
     const Vector2 m = fonts::measureTextEx(text, size);
     fonts::drawTextEx(text, {std::round(cx - m.x / 2.0f), std::round(y)}, size, color);
+}
+
+void drawRight(const char* text, float right, float y, float size, Color color)
+{
+    const Vector2 m = fonts::measureTextEx(text, size);
+    fonts::drawTextEx(text, {std::round(right - m.x), std::round(y)}, size, color);
 }
 
 // Le menu à gauche, le tableau des scores à droite, l'ensemble centré.
@@ -43,6 +52,7 @@ float layoutLeft()
 void MainMenu::open()
 {
     selected_ = 0;
+    characterIndex_ = -1;
     time_ = 0.0f;
 }
 
@@ -57,6 +67,7 @@ const char* MainMenu::itemLabel(Item item) const
     case Item::Night: return gameModeRules(GameMode::Night).name;
     case Item::Endless: return gameModeRules(GameMode::Endless).name;
     case Item::Nightmare: return gameModeRules(GameMode::Nightmare).name;
+    case Item::Character: return "Personnage";
     case Item::Talents: return "Talents";
     case Item::Quit: return "Quitter";
     case Item::Count: break;
@@ -68,6 +79,7 @@ MainMenu::Result MainMenu::update(float dt, const Progression& progression)
 {
     Result result;
     time_ += dt;
+    if (characterIndex_ < 0) characterIndex_ = static_cast<int>(progression.selectedCharacter());
     const int previous = selected_;
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) selected_ = (selected_ + kItemCount - 1) % kItemCount;
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) selected_ = (selected_ + 1) % kItemCount;
@@ -85,9 +97,33 @@ MainMenu::Result MainMenu::update(float dt, const Progression& progression)
     result.moved = selected_ != previous;
     // T reste un raccourci vers les talents.
     if (IsKeyPressed(KEY_T)) result.openTalents = true;
-    if (!clicked && !IsKeyPressed(KEY_ENTER) && !IsKeyPressed(KEY_SPACE)) return result;
 
     const Item item = static_cast<Item>(selected_);
+    const bool confirm = clicked || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
+    if (item == Item::Character) {
+        // Flèches (ou Q/D, ou clic) : parcourir ; un personnage acheté est choisi aussitôt.
+        int step = 0;
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) step = -1;
+        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) step = 1;
+        const CharacterId shown = static_cast<CharacterId>(characterIndex_);
+        if (confirm && !progression.owns(shown)) {
+            if (progression.canBuy(shown)) {
+                result.buyCharacter = characterIndex_;
+            } else {
+                result.refused = true;
+            }
+        } else if (clicked) {
+            step = 1;
+        }
+        if (step != 0) {
+            characterIndex_ = (characterIndex_ + step + kCharacterCount) % kCharacterCount;
+            result.moved = true;
+            if (progression.owns(static_cast<CharacterId>(characterIndex_))) result.selectCharacter = characterIndex_;
+        }
+        return result;
+    }
+    if (!confirm) return result;
+
     switch (item) {
     case Item::Night:
     case Item::Endless:
@@ -102,6 +138,7 @@ MainMenu::Result MainMenu::update(float dt, const Progression& progression)
     }
     case Item::Talents: result.openTalents = true; break;
     case Item::Quit: result.quit = true; break;
+    case Item::Character:
     case Item::Count: break;
     }
     return result;
@@ -111,10 +148,11 @@ void MainMenu::draw(const Progression& progression) const
 {
     const float w = static_cast<float>(GetScreenWidth());
     const float h = static_cast<float>(GetScreenHeight());
-    drawCentered("LAST LIGHT", w / 2.0f, 70.0f, 96.0f, kTitle);
-    drawCentered("Les morts craignent la lumière. Tiens jusqu'à l'aube.", w / 2.0f, 180.0f, 22.0f, kTagline);
+    drawCentered("LAST LIGHT", w / 2.0f, 60.0f, 96.0f, kTitle);
+    drawCentered("Les morts craignent la lumière. Tiens jusqu'à l'aube.", w / 2.0f, 170.0f, 22.0f, kTagline);
 
-    // Menu
+    const CharacterId shown = static_cast<CharacterId>(characterIndex_ < 0
+        ? static_cast<int>(progression.selectedCharacter()) : characterIndex_);
     for (int i = 0; i < kItemCount; ++i) {
         const Item item = static_cast<Item>(i);
         const Rectangle r = itemRect(i);
@@ -125,24 +163,39 @@ void MainMenu::draw(const Progression& progression) const
             const float pulse = 0.6f + 0.4f * std::sin(time_ * 5.0f);
             DrawRectangleRoundedLinesEx(r, 0.2f, 6, 2.0f, Fade(kBorder, pulse));
         }
-        const Color color = locked ? kLocked : kText;
-        fonts::drawTextEx(itemLabel(item), {r.x + 22.0f, r.y + 14.0f}, 26.0f, color);
+        const float right = r.x + r.width - 18.0f;
+        const float detailY = r.y + 17.0f;
+        if (item == Item::Character) {
+            // « < Vampire > » : le personnage affiché, et son prix s'il n'est pas acheté.
+            const CharacterInfo& c = characterInfo(shown);
+            fonts::drawTextEx(TextFormat("<  %s  >", c.name), {r.x + 22.0f, r.y + 12.0f}, 24.0f,
+                              progression.owns(shown) ? kText : kLocked);
+            if (!progression.owns(shown)) {
+                drawRight(TextFormat("%d os", c.cost), right, detailY, 15.0f,
+                          progression.canBuy(shown) ? kAffordable : kTooExpensive);
+            } else if (shown == progression.selectedCharacter()) {
+                drawRight("choisi", right, detailY, 15.0f, kGold);
+            }
+            continue;
+        }
+        fonts::drawTextEx(itemLabel(item), {r.x + 22.0f, r.y + 12.0f}, 24.0f, locked ? kLocked : kText);
         if (locked) {
-            const char* lock = "Gagne une Nuit";
-            const Vector2 m = fonts::measureTextEx(lock, 15.0f);
-            fonts::drawTextEx(lock, {r.x + r.width - 18.0f - m.x, r.y + 20.0f}, 15.0f, kLocked);
+            drawRight("Gagne une Nuit", right, detailY, 15.0f, kLocked);
         } else if (item == Item::Talents) {
-            const char* bones = TextFormat("%d ossements", progression.bones());
-            const Vector2 m = fonts::measureTextEx(bones, 15.0f);
-            fonts::drawTextEx(bones, {r.x + r.width - 18.0f - m.x, r.y + 20.0f}, 15.0f, kBone);
+            drawRight(TextFormat("%d ossements", progression.bones()), right, detailY, 15.0f, kBone);
         }
     }
-    // Description du mode sélectionné.
+
+    // Description du mode ou du personnage sélectionné.
+    const Rectangle last = itemRect(kItemCount - 1);
+    const char* description = nullptr;
     if (selected_ <= static_cast<int>(Item::Nightmare)) {
-        const Rectangle last = itemRect(kItemCount - 1);
-        fonts::drawTextEx(gameModeRules(static_cast<GameMode>(selected_)).description,
-                          {last.x, last.y + kItemHeight + 18.0f}, 16.0f, kTextDim);
+        description = gameModeRules(static_cast<GameMode>(selected_)).description;
+    } else if (selected_ == static_cast<int>(Item::Character)) {
+        description = progression.owns(shown) ? characterInfo(shown).description
+                                              : TextFormat("%s   (Entrée : acheter)", characterInfo(shown).description);
     }
+    if (description) fonts::drawTextEx(description, {last.x, last.y + kItemHeight + 14.0f}, 15.0f, kTextDim);
 
     // Tableau des scores
     const Rectangle board = {layoutLeft() + kItemWidth + kColumnGap, kMenuTop, kBoardWidth,
@@ -165,7 +218,7 @@ void MainMenu::draw(const Progression& progression) const
 
     const char* move = "ZQSD : bouger   Maj : sprint   E : interagir   Entrée : vague suivante";
     const char* fight = "Clic : tirer   Clic droit : lampe   R : recharger   1-4 / molette : armes";
-    drawCentered(move, w / 2.0f, h - 76.0f, 16.0f, kTextDim);
-    drawCentered(fight, w / 2.0f, h - 50.0f, 16.0f, kTextDim);
+    drawCentered(move, w / 2.0f, h - 66.0f, 15.0f, kTextDim);
+    drawCentered(fight, w / 2.0f, h - 42.0f, 15.0f, kTextDim);
     DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
 }

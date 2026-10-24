@@ -41,16 +41,22 @@ float angleDelta(float a, float b)
 }
 
 Player::Player(const AnimatedModel& model)
-    : model_(model)
-    , clipIdle_(model.findClip("idle"))
-    , clipWalk_(model.findClip("walk"))
-    , clipSprint_(model.findClip("sprint"))
-    , clipDie_(model.findClip("die"))
-    , clipHold_(model.findClip("holding-right"))
-    , clipHoldShoot_(model.findClip("holding-right-shoot"))
-    , armRight_(model.findNode("arm-right"))
-    , armsMask_(model.nodeMask({"arm-right"}))
 {
+    setModel(model);
+}
+
+void Player::setModel(const AnimatedModel& model)
+{
+    model_ = &model;
+    clipIdle_ = model.findClip("idle");
+    clipWalk_ = model.findClip("walk");
+    clipSprint_ = model.findClip("sprint");
+    clipDie_ = model.findClip("die");
+    clipHold_ = model.findClip("holding-right");
+    clipHoldShoot_ = model.findClip("holding-right-shoot");
+    armRight_ = model.findNode("arm-right");
+    armsMask_ = model.nodeMask({"arm-right"});
+    anim_ = AnimationState{};
 }
 
 void Player::reset(Vector3 spawn)
@@ -68,7 +74,7 @@ void Player::reset(Vector3 spawn)
     shootPose_ = 0.0f;
     dead_ = false;
     anim_ = AnimationState{};
-    model_.play(anim_, clipIdle_);
+    model_->play(anim_, clipIdle_);
 }
 
 Vector3 Player::forward() const
@@ -83,7 +89,7 @@ Vector3 Player::muzzle() const
 
 bool Player::deathFinished() const
 {
-    return dead_ && anim_.time >= model_.clipDuration(clipDie_) + kDeathLinger;
+    return dead_ && anim_.time >= model_->clipDuration(clipDie_) + kDeathLinger;
 }
 
 Matrix Player::bodyTransform() const
@@ -99,7 +105,7 @@ void Player::update(float dt, const World& world, Vector3 aimPoint, Vector3 move
     shootPose_ = std::max(0.0f, shootPose_ - dt);
 
     if (dead_) {
-        model_.update(anim_, dt);
+        model_->update(anim_, dt);
         return;
     }
 
@@ -127,23 +133,23 @@ void Player::update(float dt, const World& world, Vector3 aimPoint, Vector3 move
     }
 
     updateAnimation(dt, Vector3Length(velocity_));
-    const Matrix arm = model_.nodeTransform(anim_, armRight_, bodyTransform());
+    const Matrix arm = model_->nodeTransform(anim_, armRight_, bodyTransform());
     hand_ = Vector3Transform(kHandLocal, arm);
 }
 
 void Player::updateAnimation(float dt, float speed)
 {
     if (speed < kMovingThreshold) {
-        model_.play(anim_, clipIdle_);
+        model_->play(anim_, clipIdle_);
     } else if (sprinting_) {
-        model_.play(anim_, clipSprint_, true, speed / kSprintAnimReference);
+        model_->play(anim_, clipSprint_, true, speed / kSprintAnimReference);
     } else {
-        model_.play(anim_, clipWalk_, true, speed / kWalkAnimReference);
+        model_->play(anim_, clipWalk_, true, speed / kWalkAnimReference);
     }
     // Le bras droit tient l'arme quelle que soit l'animation des jambes.
     anim_.overlayClip = shootPose_ > 0.0f ? clipHoldShoot_ : clipHold_;
     anim_.overlayMask = armsMask_;
-    model_.update(anim_, dt);
+    model_->update(anim_, dt);
 }
 
 bool Player::takeDamage(float amount, Vector3 from, EventQueue& events)
@@ -160,7 +166,7 @@ bool Player::takeDamage(float amount, Vector3 from, EventQueue& events)
     dead_ = true;
     anim_.overlayClip = -1;
     anim_.overlayMask = 0;
-    model_.play(anim_, clipDie_, false, 1.0f, true);
+    model_->play(anim_, clipDie_, false, 1.0f, true);
     events.push_back({EventType::PlayerDied, position_});
     return true;
 }
@@ -191,7 +197,7 @@ void Player::notifyShot()
 
 void Player::draw(const Model* weapon) const
 {
-    model_.draw(anim_, bodyTransform(), hurtFlash_ > 0.0f ? kHurtTint : WHITE);
+    model_->draw(anim_, bodyTransform(), hurtFlash_ > 0.0f ? kHurtTint : WHITE);
     if (weapon && !dead_) {
         const Matrix transform = MatrixMultiply(
             MatrixMultiply(MatrixScale(kWeaponScale, kWeaponScale, kWeaponScale), MatrixRotateY(yaw_)),
