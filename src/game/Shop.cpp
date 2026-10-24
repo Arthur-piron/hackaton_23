@@ -39,7 +39,7 @@ std::string upgradeValue(const Arsenal& arsenal, int weapon, WeaponUpgrade upgra
 const char* upgradeUnit(WeaponUpgrade upgrade)
 {
     switch (upgrade) {
-    case U::Damage: return "degats";
+    case U::Damage: return "dégâts";
     case U::FireRate: return "tirs/s";
     case U::Magazine: return "balles";
     case U::Count: break;
@@ -52,8 +52,8 @@ std::string weaponDetails(const Arsenal& arsenal, int weapon)
 {
     const WeaponStats& stats = Arsenal::catalog()[static_cast<size_t>(weapon)];
     const int damage = rounded(arsenal.damageOf(weapon));
-    std::string text = stats.pellets > 1 ? TextFormat("%d plombs x %d degats", stats.pellets, damage)
-                                         : TextFormat("%d degats", damage);
+    std::string text = stats.pellets > 1 ? TextFormat("%d plombs x %d dégâts", stats.pellets, damage)
+                                         : TextFormat("%d dégâts", damage);
     text += TextFormat(", %d coups", arsenal.magazineOf(weapon));
     if (stats.pierce > 0) text += TextFormat(", perfore %d", stats.pierce);
     if (stats.automatic) text += ", auto";
@@ -64,15 +64,15 @@ std::string weaponDetails(const Arsenal& arsenal, int weapon)
 const std::vector<ShopItem>& Shop::catalog()
 {
     static const std::vector<ShopItem> items = {
-        {K::Weapon, C::Weapons, "Fusil a pompe", "Controle de foule, gros recul", {400, 0, 0}, 1, U::Damage},
-        {K::Weapon, C::Weapons, "Mitraillette", "Arrose les hordes sans relacher", {650, 0, 0}, 2, U::Damage},
-        {K::Weapon, C::Weapons, "Fusil de chasse", "Une balle, toute une rangee", {900, 0, 0}, 3, U::Damage},
-        {K::Upgrade, C::Upgrades, "Degats", "Balles plus lourdes", {200, 450, 800}, -1, U::Damage},
-        {K::Upgrade, C::Upgrades, "Cadence", "Mecanisme huile", {200, 450, 800}, -1, U::FireRate},
-        {K::Upgrade, C::Upgrades, "Chargeur", "Chargeur allonge", {150, 350, 600}, -1, U::Magazine},
-        {K::Heal, C::Consumables, "Soin", "Bandages et eau benite", {120, 0, 0}, -1, U::Damage},
-        {K::Ammo, C::Consumables, "Munitions", "Remplit la reserve de l'arme en main", {100, 0, 0}, -1, U::Damage},
-        {K::CardReroll, C::Consumables, "Relance des cartes", "Retire 3 cartes au prochain niveau", {150, 0, 0},
+        {K::Weapon, C::Weapons, "Fusil à pompe", "Contrôle de foule, gros recul", {400, 0, 0}, 1, U::Damage},
+        {K::Weapon, C::Weapons, "Mitraillette", "Arrose les hordes sans relâcher", {650, 0, 0}, 2, U::Damage},
+        {K::Weapon, C::Weapons, "Fusil de chasse", "Une balle, toute une rangée", {900, 0, 0}, 3, U::Damage},
+        {K::Upgrade, C::Upgrades, "Dégâts", "Balles plus lourdes", {200, 450, 800}, -1, U::Damage},
+        {K::Upgrade, C::Upgrades, "Cadence", "Mécanisme huilé", {200, 450, 800}, -1, U::FireRate},
+        {K::Upgrade, C::Upgrades, "Chargeur", "Chargeur allongé", {150, 350, 600}, -1, U::Magazine},
+        {K::Heal, C::Consumables, "Soin", "Bandages et eau bénite", {120, 0, 0}, -1, U::Damage},
+        {K::Ammo, C::Consumables, "Munitions", "Remplit la réserve de l'arme tenue", {100, 0, 0}, -1, U::Damage},
+        {K::CardReroll, C::Consumables, "Relance", "Retire 3 cartes au prochain niveau", {150, 0, 0},
          -1, U::Damage},
     };
     return items;
@@ -81,9 +81,9 @@ const std::vector<ShopItem>& Shop::catalog()
 const char* Shop::refusalReason(const ShopOffer& offer)
 {
     switch (offer.availability) {
-    case ShopAvailability::Owned: return "Deja possede";
-    case ShopAvailability::Maxed: return "Deja au maximum";
-    case ShopAvailability::Full: return "Deja plein";
+    case ShopAvailability::Owned: return "Déjà possédé";
+    case ShopAvailability::Maxed: return "Déjà au maximum";
+    case ShopAvailability::Full: return "Déjà plein";
     case ShopAvailability::Unavailable: return "Indisponible";
     case ShopAvailability::Available: break;
     }
@@ -142,7 +142,7 @@ ShopOffer Shop::offer(int index, int weapon) const
             o.availability = ShopAvailability::Unavailable;
             break;
         }
-        o.details = TextFormat("%s : reserve %d / %d", stats.name.c_str(), arsenal_.reserveOf(current),
+        o.details = TextFormat("%s : réserve %d / %d", stats.name.c_str(), arsenal_.reserveOf(current),
                                arsenal_.maxReserveOf(current));
         if (arsenal_.reserveOf(current) >= arsenal_.maxReserveOf(current)) o.availability = ShopAvailability::Full;
         break;

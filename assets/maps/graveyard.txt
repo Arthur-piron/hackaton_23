@@ -22,10 +22,10 @@
 player 0 -1
 
 zone court    0    -8  -8   8   6  Cour du gardien
-zone alley    500  -14 -26  14 -8  Allee des tombes
+zone alley    500  -14 -26  14 -8  Allée des tombes
 zone chapel   1000 -30 -26 -14 -8  Chapelle
 zone crypt    1250  14 -26  30 -8  Crypte
-zone mausoleum 1500 -8 -38   8 -26 Mausolee
+zone mausoleum 1500 -8 -38   8 -26 Mausolée
 
 gate alley     0  -8   0
 gate chapel  -14 -17  90
@@ -75,7 +75,7 @@ wall graveyard/stone-wall.glb -30 -26 -30 -8
 wall graveyard/stone-wall.glb 14 -26 30 -26
 wall graveyard/stone-wall.glb 14 -8 30 -8
 wall graveyard/stone-wall.glb 30 -26 30 -8
-# Mausolee
+# Mausolée
 wall graveyard/stone-wall.glb -8 -38 8 -38
 wall graveyard/stone-wall.glb -8 -38 -8 -26
 wall graveyard/stone-wall.glb 8 -38 8 -26
@@ -148,7 +148,7 @@ prop graveyard/pine-crooked.glb 6.8 4.8 30 1.2 trunk
 prop graveyard/debris.glb -7.0 -1.6 0 1.2 -
 prop graveyard/gravestone-debris.glb -6.9 0.2 60 1 -
 
-# ---------------------------------------------------------------- Allee des tombes
+# ---------------------------------------------------------------- Allée des tombes
 row graveyard/road.glb -0.8 -8.8 -0.8 -25.2 11 0 1 -
 row graveyard/road.glb 0.8 -8.8 0.8 -25.2 11 0 1 -
 row graveyard/road.glb -13.2 -16.2 -2.4 -16.2 7 0 1 -
@@ -233,7 +233,7 @@ prop graveyard/debris.glb 17 -24.2 30 1 -
 prop graveyard/rocks-tall.glb 28.4 -17 0 1 solid
 prop graveyard/gravestone-debris.glb 16.6 -10 -40 1 -
 
-# ---------------------------------------------------------------- Mausolee
+# ---------------------------------------------------------------- Mausolée
 prop graveyard/crypt-large.glb 0 -33.4 0 1.6 solid
 prop graveyard/crypt-large-roof.glb 0 -33.4 0 1.6 - 3.2
 prop graveyard/crypt-large-door.glb 0 -29.6 0 1.6 -

@@ -1,5 +1,7 @@
 #include "game/Merchant.hpp"
 
+#include "core/Fonts.hpp"
+
 #include "game/Scale.hpp"
 #include "raymath.h"
 
@@ -37,10 +39,10 @@ float angleDelta(float a, float b)
 
 void drawCenteredText(const char* text, Vector2 at, int size, Color color)
 {
-    const int x = static_cast<int>(at.x) - MeasureText(text, size) / 2;
+    const int x = static_cast<int>(at.x) - fonts::measureText(text, size) / 2;
     const int y = static_cast<int>(at.y);
-    DrawText(text, x + 2, y + 2, size, kShadow);
-    DrawText(text, x, y, size, color);
+    fonts::drawText(text, x + 2, y + 2, size, kShadow);
+    fonts::drawText(text, x, y, size, color);
 }
 }
 
@@ -90,12 +92,12 @@ void Merchant::drawPrompt(const Camera3D& camera, Vector3 player, bool open) con
     if (distance > kSignDistance) return;
     const Vector2 screen = GetWorldToScreen(Vector3Add(position_, {0.0f, kSignHeight, 0.0f}), camera);
     if (distance > kInteractDistance) {
-        drawCenteredText(open ? "MARCHAND" : "MARCHAND - ferme", screen, 18, open ? kSignColor : kClosedColor);
+        drawCenteredText(open ? "MARCHAND" : "MARCHAND - fermé", screen, 18, open ? kSignColor : kClosedColor);
         return;
     }
     if (open) {
         drawCenteredText("E : marchand", {screen.x, screen.y - 30.0f}, 24, kOpenColor);
-        drawCenteredText("Armes, ameliorations, soins", screen, 18, kSignColor);
+        drawCenteredText("Armes, améliorations, soins", screen, 18, kSignColor);
     } else {
         drawCenteredText("Revenez entre les vagues", {screen.x, screen.y - 30.0f}, 24, kDeniedColor);
         drawCenteredText("Le marchand se cache pendant l'assaut", screen, 18, kClosedColor);

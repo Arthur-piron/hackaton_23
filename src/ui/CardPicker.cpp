@@ -1,5 +1,7 @@
 #include "ui/CardPicker.hpp"
 
+#include "core/Fonts.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -54,13 +56,13 @@ Color mix(Color a, Color b, float t)
 
 Vector2 measure(const char* text, float size)
 {
-    return MeasureTextEx(GetFontDefault(), text, size, size / 10.0f);
+    return fonts::measureTextEx(text, size);
 }
 
 void drawCentered(const char* text, float cx, float y, float size, Color color)
 {
     const Vector2 m = measure(text, size);
-    DrawTextEx(GetFontDefault(), text, {std::round(cx - m.x / 2.0f), std::round(y)}, size, size / 10.0f, color);
+    fonts::drawTextEx(text, {std::round(cx - m.x / 2.0f), std::round(y)}, size, color);
 }
 
 // Coupe un texte en lignes qui tiennent dans maxWidth.
@@ -150,7 +152,7 @@ const char* rarityName(CardRarity rarity)
     switch (rarity) {
     case CardRarity::Common: return "COMMUNE";
     case CardRarity::Rare: return "RARE";
-    case CardRarity::Legendary: return "LEGENDAIRE";
+    case CardRarity::Legendary: return "LÉGENDAIRE";
     }
     return "";
 }

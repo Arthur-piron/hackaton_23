@@ -1,5 +1,7 @@
 #include "ui/Hud.hpp"
 
+#include "core/Fonts.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -38,13 +40,13 @@ constexpr int kCardsPerRow = 9;
 
 void drawTextCentered(const char* text, int cx, int y, int size, Color color)
 {
-    DrawText(text, cx - MeasureText(text, size) / 2, y, size, color);
+    fonts::drawText(text, cx - fonts::measureText(text, size) / 2, y, size, color);
 }
 
 void drawTextShadow(const char* text, int x, int y, int size, Color color)
 {
-    DrawText(text, x + 2, y + 2, size, {0, 0, 0, static_cast<unsigned char>(color.a * 0.7f)});
-    DrawText(text, x, y, size, color);
+    fonts::drawText(text, x + 2, y + 2, size, {0, 0, 0, static_cast<unsigned char>(color.a * 0.7f)});
+    fonts::drawText(text, x, y, size, color);
 }
 }
 
@@ -92,7 +94,7 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
         const int size = static_cast<int>((22 + 10 * (1.0f - t)) * n.scale);
         Color c = n.color;
         c.a = static_cast<unsigned char>(255 * (1.0f - t * t));
-        drawTextShadow(n.text.c_str(), static_cast<int>(p.x) - MeasureText(n.text.c_str(), size) / 2,
+        drawTextShadow(n.text.c_str(), static_cast<int>(p.x) - fonts::measureText(n.text.c_str(), size) / 2,
                        static_cast<int>(p.y), size, c);
     }
 
@@ -131,8 +133,8 @@ void Hud::drawCards(const HudData& data) const
         DrawRectangleRounded({x + 2.0f, y + 2.0f, r.width - 4.0f, r.height - 4.0f}, 0.3f, 6,
                              {card.color.r, card.color.g, card.color.b, 50});
         DrawRectangleRoundedLinesEx(r, 0.3f, 6, 1.5f, {card.border.r, card.border.g, card.border.b, 220});
-        const int labelWidth = MeasureText(card.label.c_str(), 10);
-        DrawText(card.label.c_str(), static_cast<int>(x) + (kCardPip - labelWidth) / 2, static_cast<int>(y) + 8, 10,
+        const int labelWidth = fonts::measureText(card.label.c_str(), 10);
+        fonts::drawText(card.label.c_str(), static_cast<int>(x) + (kCardPip - labelWidth) / 2, static_cast<int>(y) + 8, 10,
                  card.color);
         // Un point par rang possédé.
         for (int k = 0; k < card.rank && card.maxRank > 1; ++k) {
@@ -153,7 +155,7 @@ void Hud::drawBars(const HudData& data) const
     DrawRectangle(x, y, width, 26, kHealthBack);
     DrawRectangle(x, y, static_cast<int>(width * ratio), 26, kHealth);
     DrawRectangleLines(x, y, width, 26, {0, 0, 0, 200});
-    DrawText(TextFormat("%d / %d", static_cast<int>(std::ceil(data.health)), static_cast<int>(data.maxHealth)),
+    fonts::drawText(TextFormat("%d / %d", static_cast<int>(std::ceil(data.health)), static_cast<int>(data.maxHealth)),
              x + 8, y + 4, 20, kText);
 
     DrawRectangle(x, y + 36, width, 10, {50, 45, 20, 255});
@@ -173,36 +175,36 @@ void Hud::drawAmmo(const HudData& data) const
     const int x = w - kMargin - 260;
     const int y = h - kMargin - 58;
     DrawRectangleRounded({static_cast<float>(x - 10), static_cast<float>(y - 10), 280.0f, 78.0f}, 0.2f, 6, kPanel);
-    DrawText(data.weaponName.c_str(), x, y, 20, kDim);
+    fonts::drawText(data.weaponName.c_str(), x, y, 20, kDim);
 
     if (data.reloading) {
-        DrawText("RECHARGEMENT", x, y + 26, 26, kGold);
+        fonts::drawText("RECHARGEMENT", x, y + 28, 22, kGold);
         DrawRectangle(x, y + 56, static_cast<int>(240 * data.reloadProgress), 4, kGold);
         return;
     }
     const Color ammoColor = data.magazine == 0 ? Color{230, 60, 60, 255} : kText;
     const char* magazine = TextFormat("%d", data.magazine);
-    DrawText(magazine, x, y + 22, 40, ammoColor);
-    const int after = x + MeasureText(magazine, 40) + 8;
+    fonts::drawText(magazine, x, y + 22, 40, ammoColor);
+    const int after = x + fonts::measureText(magazine, 40) + 8;
     const char* reserve = data.infiniteReserve ? TextFormat("/ %d   inf.", data.magazineSize)
                                                : TextFormat("/ %d   %d", data.magazineSize, data.reserve);
-    DrawText(reserve, after, y + 38, 20, kDim);
+    fonts::drawText(reserve, after, y + 38, 20, kDim);
 }
 
 void Hud::drawWave(const HudData& data) const
 {
     const int cx = GetScreenWidth() / 2;
-    const char* wave = data.wave > 0 ? TextFormat("VAGUE %d", data.wave) : "PREPAREZ-VOUS";
-    drawTextShadow(wave, cx - MeasureText(wave, 30) / 2, 16, 30, kText);
-    const char* info = data.intermission ? TextFormat("prochaine vague dans %d s   (Entree : maintenant)",
+    const char* wave = data.wave > 0 ? TextFormat("VAGUE %d", data.wave) : "PRÉPAREZ-VOUS";
+    drawTextShadow(wave, cx - fonts::measureText(wave, 30) / 2, 16, 30, kText);
+    const char* info = data.intermission ? TextFormat("prochaine vague dans %d s   (Entrée : maintenant)",
                                                       static_cast<int>(std::ceil(data.intermissionLeft)))
                                          : TextFormat("%d morts-vivants restants", data.remaining);
     drawTextCentered(info, cx, 52, 18, kDim);
 
     const char* score = TextFormat("%d", data.score);
-    drawTextShadow(score, GetScreenWidth() - kMargin - MeasureText(score, 36), 14, 36, kGold);
-    const char* kills = TextFormat("%d tues", data.kills);
-    DrawText(kills, GetScreenWidth() - kMargin - MeasureText(kills, 18), 54, 18, kDim);
+    drawTextShadow(score, GetScreenWidth() - kMargin - fonts::measureText(score, 36), 14, 36, kGold);
+    const char* kills = TextFormat("%d tués", data.kills);
+    fonts::drawText(kills, GetScreenWidth() - kMargin - fonts::measureText(kills, 18), 54, 18, kDim);
 }
 
 void Hud::drawEconomy(const HudData& data) const
@@ -228,8 +230,8 @@ void Hud::drawEconomy(const HudData& data) const
 
     const int barY = y + 52;
     const char* level = TextFormat("NIV %d", data.level);
-    DrawText(level, x + 12, barY - 5, 18, kXp);
-    const int barX = x + 22 + MeasureText(level, 18);
+    fonts::drawText(level, x + 12, barY - 5, 18, kXp);
+    const int barX = x + 22 + fonts::measureText(level, 18);
     const int barWidth = x + 236 - 14 - barX;
     DrawRectangle(barX, barY, barWidth, 8, kXpBack);
     DrawRectangle(barX, barY, static_cast<int>(barWidth * std::clamp(data.xpProgress, 0.0f, 1.0f)), 8, kXp);
@@ -248,11 +250,11 @@ void Hud::drawCombo(const HudData& data) const
     const int size = static_cast<int>((52 + 6 * tier) * (1.0f + 0.35f * comboPulse_ + beat));
     const char* multiplier = TextFormat("x%d", data.comboMultiplier);
     const int boxHeight = 52 + 6 * 4;
-    drawTextShadow(multiplier, right - MeasureText(multiplier, size), y + (boxHeight - size) / 2, size, color);
+    drawTextShadow(multiplier, right - fonts::measureText(multiplier, size), y + (boxHeight - size) / 2, size, color);
 
     const char* count = TextFormat("COMBO %d", data.combo);
     const int infoY = y + boxHeight + 4;
-    DrawText(count, right - MeasureText(count, 18), infoY, 18, kText);
+    fonts::drawText(count, right - fonts::measureText(count, 18), infoY, 18, kText);
 
     const int gaugeWidth = 140;
     const int gaugeY = infoY + 24;
@@ -273,7 +275,7 @@ void Hud::drawAnnouncement() const
     const int y = GetScreenHeight() / 3;
     Color c = titleColor_;
     c.a = static_cast<unsigned char>(255 * alpha);
-    drawTextShadow(title_.c_str(), cx - MeasureText(title_.c_str(), size) / 2, y, size, c);
+    drawTextShadow(title_.c_str(), cx - fonts::measureText(title_.c_str(), size) / 2, y, size, c);
     Color sub = kText;
     sub.a = static_cast<unsigned char>(220 * alpha);
     drawTextCentered(subtitle_.c_str(), cx, y + size + 10, 24, sub);
