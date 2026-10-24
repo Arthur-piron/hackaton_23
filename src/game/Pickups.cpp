@@ -37,12 +37,17 @@ constexpr float kCoinRadius = 0.2f;
 constexpr float kCoinHalfThickness = 0.025f;
 constexpr float kCoinSpin = 3.0f;        // radians par seconde
 constexpr float kOrbRadius = 0.11f;
+constexpr float kBatteryRadius = 0.08f;
+constexpr float kBatteryHalfLength = 0.17f;
 
 constexpr Color kCoinColor = {255, 196, 50, 255};
 constexpr Color kCoinFace = {255, 228, 120, 255};
 constexpr Color kCoinGlow = {255, 180, 50, 60};
 constexpr Color kOrbColor = {150, 255, 225, 255};
 constexpr Color kOrbGlow = {40, 220, 180, 60};
+constexpr Color kBatteryColor = {60, 200, 90, 255};
+constexpr Color kBatteryCap = {210, 210, 200, 255};
+constexpr Color kBatteryGlow = {120, 255, 110, 60};
 
 float randomRange(float min, float max)
 {
@@ -97,6 +102,11 @@ void Pickups::spawnCoinRain(Vector3 center, int coins, int goldPerCoin)
     }
 }
 
+void Pickups::spawnBattery(Vector3 position)
+{
+    spawn(Kind::Battery, 1, position);
+}
+
 void Pickups::update(float dt, Vector3 playerPosition, Economy& economy, EventQueue& events)
 {
     const Vector3 target = {playerPosition.x, kPlayerChestHeight, playerPosition.z};
@@ -132,6 +142,8 @@ void Pickups::update(float dt, Vector3 playerPosition, Economy& economy, EventQu
             if (item.kind == Kind::Gold) {
                 economy.addGold(item.value);
                 events.push_back({EventType::GoldPicked, item.position, static_cast<float>(item.value)});
+            } else if (item.kind == Kind::Battery) {
+                events.push_back({EventType::BatteryPicked, item.position, static_cast<float>(item.value)});
             } else {
                 events.push_back({EventType::XpPicked, item.position, static_cast<float>(item.value)});
                 economy.addXp(item.value, events);
@@ -177,6 +189,14 @@ void Pickups::draw() const
             const Vector3 relief = Vector3Scale(half, 1.4f);
             DrawCylinderEx(Vector3Subtract(v.center, relief), Vector3Add(v.center, relief), kCoinRadius * 0.62f,
                            kCoinRadius * 0.62f, 16, kCoinFace);
+        } else if (v.kind == Kind::Battery) {
+            // Pile couchée qui tourne lentement sur elle-même, borne + argentée.
+            const float spin = v.age * kCoinSpin * 0.5f + v.phase;
+            const Vector3 axis = {std::cos(spin) * kBatteryHalfLength, 0.0f, std::sin(spin) * kBatteryHalfLength};
+            const Vector3 tip = Vector3Add(v.center, axis);
+            DrawCylinderEx(Vector3Subtract(v.center, axis), tip, kBatteryRadius, kBatteryRadius, 10, kBatteryColor);
+            DrawCylinderEx(tip, Vector3Add(tip, Vector3Scale(axis, 0.18f)), kBatteryRadius * 0.45f,
+                           kBatteryRadius * 0.45f, 8, kBatteryCap);
         } else {
             DrawSphereEx(v.center, kOrbRadius, 10, 10, kOrbColor);
         }
@@ -189,6 +209,9 @@ void Pickups::draw() const
         if (v.kind == Kind::Gold) {
             DrawSphereEx(v.center, kCoinRadius * 1.6f, 8, 8, kCoinGlow);
             DrawSphereEx(v.center, kCoinRadius * 2.6f, 8, 8, {kCoinGlow.r, kCoinGlow.g, kCoinGlow.b, 22});
+        } else if (v.kind == Kind::Battery) {
+            const float pulse = 1.0f + 0.2f * std::sin(v.age * 5.0f + v.phase);
+            DrawSphereEx(v.center, kBatteryHalfLength * 1.8f * pulse, 8, 8, kBatteryGlow);
         } else {
             const float pulse = 1.0f + 0.15f * std::sin(v.age * 6.0f + v.phase);
             DrawSphereEx(v.center, kOrbRadius * 2.2f * pulse, 8, 8, kOrbGlow);

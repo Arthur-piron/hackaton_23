@@ -14,6 +14,11 @@ constexpr Color kPanel = {10, 10, 16, 170};
 constexpr Color kHealth = {200, 40, 50, 255};
 constexpr Color kHealthBack = {60, 15, 20, 255};
 constexpr Color kStamina = {230, 200, 90, 255};
+constexpr Color kBattery = {190, 225, 255, 255};
+constexpr Color kBatteryOff = {95, 110, 130, 255};
+constexpr Color kBatteryLow = {235, 70, 60, 255};
+constexpr Color kBatteryBack = {20, 28, 40, 255};
+constexpr float kBatteryBlinkRate = 6.0f;
 constexpr Color kText = {235, 230, 215, 255};
 constexpr Color kDim = {150, 145, 135, 255};
 constexpr Color kGold = {255, 205, 90, 255};
@@ -153,6 +158,12 @@ void Hud::drawBars(const HudData& data) const
 
     DrawRectangle(x, y + 36, width, 10, {50, 45, 20, 255});
     DrawRectangle(x, y + 36, static_cast<int>(width * std::clamp(data.stamina, 0.0f, 1.0f)), 10, kStamina);
+
+    // Batterie de la lampe : pâle allumée, grise éteinte, rouge clignotant quand elle faiblit.
+    Color battery = data.flashlightOn ? kBattery : kBatteryOff;
+    if (data.batteryLow && std::sin(time_ * kBatteryBlinkRate) > 0.0f) battery = kBatteryLow;
+    DrawRectangle(x, y + 52, width, 8, kBatteryBack);
+    DrawRectangle(x, y + 52, static_cast<int>(width * std::clamp(data.battery, 0.0f, 1.0f)), 8, battery);
 }
 
 void Hud::drawAmmo(const HudData& data) const

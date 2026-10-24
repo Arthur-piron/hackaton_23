@@ -19,6 +19,9 @@ struct HudData {
     float health = 0.0f;
     float maxHealth = 1.0f;
     float stamina = 1.0f;
+    float battery = 1.0f;        // charge de la lampe, 0..1
+    bool flashlightOn = false;
+    bool batteryLow = false;
     std::string weaponName;
     int magazine = 0;
     int magazineSize = 0;

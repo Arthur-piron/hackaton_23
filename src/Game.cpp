@@ -59,11 +59,14 @@ constexpr int kFortuneComboMultiplier = 5;
 constexpr int kFortuneCoins = 50;
 constexpr int kFortuneGoldPerCoin = 5;
 constexpr float kExplosionShake = 0.35f;
+constexpr float kFrostSlow = 0.3f;
+constexpr float kFrostDuration = 1.5f;
 
 constexpr Color kBackgroundColor = {12, 14, 22, 255};
 constexpr Color kDamageColor = {255, 245, 220, 255};
 constexpr Color kCritColor = {255, 225, 40, 255};
 constexpr Color kBurnColor = {255, 140, 50, 255};
+constexpr Color kLightBurnColor = {180, 220, 255, 255};
 constexpr Color kNecroticColor = {150, 255, 90, 200};
 constexpr Color kSunColor = {255, 230, 150, 220};
 constexpr Color kLastStandColor = {120, 200, 255, 220};
@@ -252,6 +255,7 @@ void Game::startNewGame()
     applyCardModifiers();
     cardEffects_.clear();
     pendingExplosions_.clear();
+    flashlight_.reset();
     levelUpSlowMo_ = 0.0f;
     pocketSunTimer_ = kPocketSunInterval;
     lastStandReady_ = true;
@@ -289,6 +293,7 @@ Game::Controls Game::readControls() const
     c.firePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     c.reload = IsKeyPressed(KEY_R);
     c.interact = IsKeyPressed(KEY_E);
+    c.light = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
     for (int i = 0; i < 4; ++i) {
         if (IsKeyPressed(KEY_ONE + i)) c.selectWeapon = i;
     }
@@ -314,6 +319,7 @@ Game::Controls Game::autopilot() const
     }
     c.fireHeld = true;
     c.firePressed = (frameCount_ % 12) == 0;
+    c.light = true;
     return c;
 }
 
@@ -378,8 +384,9 @@ void Game::updateLighting(float dt)
     const Vector3 forward = player_->forward();
     const Vector3 lamp = {position.x + forward.x * kFlashlightForward, position.y + kFlashlightHeight,
                           position.z + forward.z * kFlashlightForward};
+    lighting_->setFlashlight(flashlight_.isOn(), flashlight_.intensity());
     lighting_->aimFlashlight(lamp, {forward.x, -kFlashlightTilt, forward.z});
-    waves_->setFlashlight(true, lamp, forward);
+    waves_->setFlashlight(flashlight_.isLit(), lamp, forward);
 
     PointLight fill;
     fill.position = Vector3Add(position, {0.0f, kPlayerFillHeight, 0.0f});
@@ -416,6 +423,7 @@ void Game::updatePlaying(float dt)
     }
 
     player_->update(dt, *world_, c.aim, alive ? c.move : Vector3{0.0f, 0.0f, 0.0f}, c.sprint);
+    flashlight_.update(dt, alive && c.light, player_->position(), events_);
     if (alive) {
         if (c.selectWeapon >= 0) arsenal_.select(c.selectWeapon);
         if (c.cycleWeapon != 0) arsenal_.cycle(c.cycleWeapon);
@@ -445,6 +453,10 @@ void Game::updatePlaying(float dt)
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
     resolveProjectiles();
+    for (const Flashlight::LightTick& tick :
+         flashlight_.illuminate(dt, player_->position(), player_->forward(), waves_->enemies(), *world_)) {
+        damageEnemy(*tick.enemy, tick.damage, {0.0f, 0.0f, 0.0f}, 0.0f, HitKind::Light);
+    }
     updateCardEffects(dt);
     economy_.update(dt);
     pickups_.update(dt, player_->position(), economy_, events_);
@@ -534,8 +546,9 @@ void Game::resolveProjectiles()
                         rebounds.push_back(r);
                     }
                 }
-            } else if (p.incendiary || chained) {
-                cardEffects_.ignite(e);
+            } else {
+                if (p.incendiary || chained) cardEffects_.ignite(e);
+                if (m.frost) e.slow(kFrostSlow, kFrostDuration);
             }
             if (chained) spreadFire(e);
 
@@ -660,6 +673,7 @@ void Game::applyCardModifiers()
     player_->setMaxHealthBonus(m.maxHealthBonus);
     economy_.setGoldMultiplier(m.goldMultiplier);
     pickups_.setMagnetMultiplier(m.magnetMultiplier);
+    flashlight_.setModifiers(m.batteryMultiplier, m.lightBonusDamage);
 }
 
 void Game::openShop()
@@ -735,6 +749,7 @@ void Game::rewardKill(const Enemy& enemy)
     const int multiplierBefore = economy_.comboMultiplier();
     const Economy::Reward reward = economy_.addKill(enemy.type());
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
+    if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
     hud_.pulseCombo();
 
     // Crochet onKill : Vampirisme, Explosion nécrotique, Fortune du mort.
@@ -771,6 +786,10 @@ void Game::handleEvents()
             if (ev.hit == HitKind::Burn) {
                 // Le feu mord en silence, en petits chiffres orange.
                 hud_.addDamageNumber(above, ev.value, kBurnColor, 0.7f);
+                break;
+            }
+            if (ev.hit == HitKind::Light) {
+                hud_.addDamageNumber(above, ev.value, kLightBurnColor, 0.6f);
                 break;
             }
             audio_.playAt("hit_flesh", ev.position, 0.55f, 0.15f);
@@ -856,6 +875,20 @@ void Game::handleEvents()
             cameraRig_.shake(kDeathShake);
             hud_.announce("DERNIER REMPART", "Pas encore...", kLastStandColor);
             break;
+        case EventType::FlashlightSwitched:
+            if (ev.value < 0.0f) {
+                audio_.play("dry_fire", 0.4f);
+            } else {
+                audio_.play("ui_click", 0.45f, 0.05f);
+            }
+            break;
+        case EventType::FlashlightFlicker:
+            audio_.play("ui_click", 0.2f, 0.3f);
+            break;
+        case EventType::BatteryPicked:
+            flashlight_.recharge(Flashlight::kPickupCharge * ev.value);
+            audio_.play("pickup", 0.6f, 0.0f);
+            break;
         }
     }
     events_.clear();
@@ -884,6 +917,9 @@ HudData Game::hudData() const
     d.health = player_->health();
     d.maxHealth = player_->maxHealth();
     d.stamina = player_->stamina();
+    d.battery = flashlight_.battery();
+    d.flashlightOn = flashlight_.isOn();
+    d.batteryLow = flashlight_.isLow();
     const WeaponStats& weapon = arsenal_.stats();
     d.weaponName = weapon.name;
     d.magazine = arsenal_.ammoInMagazine();
