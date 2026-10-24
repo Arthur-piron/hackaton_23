@@ -11,6 +11,7 @@
 
 struct WeaponStats {
     std::string name;
+    std::string goldenName;   // variante légendaire (boîte mystère)
     std::string model;        // fichier dans assets/models/blaster/
     float damage = 10.0f;     // par projectile
     float fireInterval = 0.3f;
@@ -35,6 +36,8 @@ enum class WeaponUpgrade { Damage, FireRate, Magazine, Count };
 class Arsenal {
 public:
     static constexpr int kMaxUpgradeLevel = 3;
+    // Variante légendaire (boîte mystère) : dégâts ×1,5 et balles incendiaires.
+    static constexpr float kLegendaryDamage = 1.5f;
 
     static const std::vector<WeaponStats>& catalog();
     // Multiplicateur apporté par une amélioration à un niveau donné (1 au niveau 0).
@@ -51,6 +54,8 @@ public:
     void addAmmo(int weapon, int amount);
     // Débloque une arme, chargeur plein et réserve au maximum.
     void unlock(int weapon);
+    // Rend une arme légendaire jusqu'à la fin de la partie.
+    void makeLegendary(int weapon);
     // Remplit la réserve d'une arme à son maximum.
     void refillReserve(int weapon);
     // Monte une amélioration d'un niveau (le chargeur reçoit aussitôt les balles en plus).
@@ -67,6 +72,12 @@ public:
     bool isReloading() const { return reloadTimer_ > 0.0f; }
     float reloadProgress() const;
     bool isUnlocked(int weapon) const { return slots_[weapon].unlocked; }
+    bool isLegendary(int weapon) const { return slots_[static_cast<size_t>(weapon)].legendary; }
+    // Nom affiché de l'arme courante (doré si elle est légendaire).
+    const std::string& displayName() const
+    {
+        return isLegendary(current_) ? stats().goldenName : stats().name;
+    }
     // Temps écoulé depuis le dernier tir (pour l'animation de recul).
     float timeSinceShot() const { return timeSinceShot_; }
 
@@ -84,6 +95,7 @@ public:
 private:
     struct Slot {
         bool unlocked = false;
+        bool legendary = false;
         int magazine = 0;
         int reserve = 0;
         std::array<int, static_cast<size_t>(WeaponUpgrade::Count)> upgrades{};

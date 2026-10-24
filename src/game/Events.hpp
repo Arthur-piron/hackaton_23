@@ -30,6 +30,10 @@ enum class EventType {
     FlashlightSwitched, // value = 1 allumée, 0 éteinte, -1 refus (batterie vide)
     FlashlightFlicker,  // la lampe hoquette : batterie presque vide
     BatteryPicked,      // pile de lampe ramassée
+    MysteryBoxOpened,   // tirage payé à la boîte mystère
+    MysteryBoxTick,     // l'arme affichée change pendant le tirage
+    MysteryBoxReady,    // l'arme tirée flotte au-dessus de la boîte ; value = 1 si légendaire
+    MysteryBoxMoved,    // la boîte s'envole (position de départ) vers un autre emplacement
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

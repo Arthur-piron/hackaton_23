@@ -191,6 +191,10 @@ Game::Game(const Options& options)
         lighting_->apply(merchantModel_->model());
         merchant_ = std::make_unique<Merchant>(*merchantModel_, map.merchants.front());
     }
+    if (!map.mysteryBoxes.empty()) {
+        mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
+        mysteryBox_->applyLighting(*lighting_);
+    }
     loadAudio();
 
     startNewGame();
@@ -210,6 +214,12 @@ Game::Game(const Options& options)
             cards_.take(card);
         }
         applyCardModifiers();
+        // La boîte mystère, posée dans la cour, tourne pendant la capture.
+        if (mysteryBox_) {
+            mysteryBox_->reset(mysteryBox_->nearestSpot(player_->position()));
+            economy_.addGold(MysteryBox::kPrice);
+            mysteryBox_->interact(mysteryBox_->position(), *zones_, economy_, events_);
+        }
         musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
     } else {
         musicDirector_.menu(audio_);
@@ -227,6 +237,7 @@ Game::~Game()
     shop_.reset();
     merchant_.reset();
     merchantModel_.reset();
+    mysteryBox_.reset();
     player_.reset();
     playerModel_.reset();
     zones_.reset();
@@ -293,6 +304,7 @@ void Game::startNewGame()
     lastStandReady_ = true;
     player_->reset(world_->playerSpawn());
     zones_->reset();
+    if (mysteryBox_) mysteryBox_->reset();
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
@@ -451,6 +463,7 @@ void Game::updateLighting(float dt)
     fill.intensity = kPlayerFillIntensity;
     lighting_->addLight(fill);
     for (const PointLight& lantern : flyingLanterns_.lights()) lighting_->addLight(lantern);
+    if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -501,11 +514,14 @@ void Game::updatePlaying(float dt)
                 return;
             }
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
+        } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
+            takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
         } else {
             zones_->tryOpenNearest(player_->position(), economy_, events_);
         }
     }
     zones_->update(dt);
+    if (mysteryBox_) mysteryBox_->update(dt, *zones_, events_);
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
@@ -755,6 +771,18 @@ void Game::openShop()
     state_ = State::Shop;
 }
 
+void Game::takeMysteryPrize(const MysteryBox::Prize& prize)
+{
+    if (prize.refused) audio_.play("dry_fire", 0.6f, 0.0f);
+    if (prize.weapon < 0) return;
+    arsenal_.unlock(prize.weapon);
+    if (prize.legendary) arsenal_.makeLegendary(prize.weapon);
+    arsenal_.select(prize.weapon);
+    audio_.play("reload", 0.8f, 0.0f);
+    hud_.announce(prize.legendary ? "ARME LÉGENDAIRE !" : "BOÎTE MYSTÈRE", arsenal_.displayName(),
+                  prize.legendary ? kGateColor : kWaveColor);
+}
+
 void Game::updateShop(float dt)
 {
     audio_.setListener(player_->position());
@@ -981,6 +1009,29 @@ void Game::handleEvents()
             flashlight_.recharge(Flashlight::kPickupCharge * ev.value);
             audio_.play("pickup", 0.6f, 0.0f);
             break;
+        case EventType::MysteryBoxOpened:
+            audio_.playAt("ui_confirm", ev.position, 0.8f, 0.0f);
+            break;
+        case EventType::MysteryBoxTick:
+            audio_.playAt("ui_click", ev.position, 0.5f, 0.25f);
+            break;
+        case EventType::MysteryBoxReady:
+            if (ev.value > 0.0f) {
+                audio_.playAt("wave_bell", ev.position, 0.9f, 0.0f);
+                cameraRig_.shake(kGateShake);
+                lighting_->flash({Vector3Add(ev.position, {0.0f, kExplosionLightHeight, 0.0f}), kGateColor, 8.0f,
+                                  kExplosionLightIntensity, 0.0f, 0.0f},
+                                 kExplosionLightDuration * 2.0f);
+            } else {
+                audio_.playAt("ui_confirm", ev.position, 0.8f, 0.1f);
+            }
+            break;
+        case EventType::MysteryBoxMoved:
+            audio_.playAt("hit_heavy", ev.position, 0.9f, 0.0f);
+            cameraRig_.shake(kGateShake);
+            hud_.announce("LA BOÎTE S'EST ENVOLÉE", TextFormat("Elle t'attend : %s",
+                          zones_->zoneName(zones_->zoneAt(ev.position)).c_str()), kGateColor);
+            break;
         }
     }
     events_.clear();
@@ -1013,7 +1064,7 @@ HudData Game::hudData() const
     d.flashlightOn = flashlight_.isOn();
     d.batteryLow = flashlight_.isLow();
     const WeaponStats& weapon = arsenal_.stats();
-    d.weaponName = weapon.name;
+    d.weaponName = arsenal_.displayName();
     d.magazine = arsenal_.ammoInMagazine();
     d.magazineSize = arsenal_.magazineSize();
     d.reserve = arsenal_.reserve();
@@ -1060,6 +1111,7 @@ void Game::draw() const
         if (state_ == State::Playing && !player_->isDead()) {
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
             if (merchant_) merchant_->drawPrompt(cameraRig_.camera(), player_->position(), intermission);
+            if (mysteryBox_) mysteryBox_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold(), *zones_);
         }
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::LevelUp) cardPicker_.draw();
@@ -1081,9 +1133,12 @@ void Game::drawWorld() const
     world_->draw(cameraRig_.camera());
     zones_->draw();
     if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
+    if (mysteryBox_) mysteryBox_->draw(weaponModels_);
     waves_->draw();
     cardEffects_.draw(waves_->enemies());
-    player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
+    const int weapon = arsenal_.current();
+    player_->draw(mysteryBox_ && arsenal_.isLegendary(weapon) ? &mysteryBox_->goldenWeapon(weapon)
+                                                              : &weaponModels_[static_cast<size_t>(weapon)]);
     projectiles_.draw();
     drawEyes();
     flyingLanterns_.draw(lanternModel_);

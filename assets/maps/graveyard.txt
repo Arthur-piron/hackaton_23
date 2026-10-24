@@ -14,6 +14,7 @@
 #   gate    <zone> x z rotY   (portail centre sur un trou de 4 m dans le mur, passage de 3 m ; rotY 0 : le long de X, 90 : le long de Z)
 #   spawn   <zone> x z        (point d'apparition des morts, actif quand la zone est ouverte)
 #   merchant x z rotY         (PNJ du marchand, ouvert entre les vagues ; rotY 0 : regarde vers +Z)
+#   mysterybox x z rotY       (emplacement de la boite mystere ; la premiere ligne est celle du depart)
 #
 #                     Mausolee  x[-8,8]   z[-38,-26]
 #   Chapelle x[-30,-14] | Allee x[-14,14] z[-26,-8] | Crypte x[14,30]
@@ -245,6 +246,12 @@ prop graveyard/lantern-glass.glb -1.6 -28.4 0 1 -
 prop graveyard/lantern-glass.glb 1.6 -28.4 0 1 -
 prop graveyard/urn-round.glb -6.6 -28 0 1 -
 prop graveyard/urn-square.glb 6.6 -28 0 1 -
+# Boite mystere : au mausolee au depart, puis elle s'envole vers une autre zone ouverte
+mysterybox -4.4 -27.7 0
+mysterybox -16.4 -24.6 0
+mysterybox 16.8 -24.6 0
+mysterybox 6.4 -9.7 0
+mysterybox -3.8 -3.6 0
 
 # ---------------------------------------------------------------- Exterieur : foret et rochers
 scatter graveyard/pine.glb -48 -54 -32 22 40 1.6 - 11

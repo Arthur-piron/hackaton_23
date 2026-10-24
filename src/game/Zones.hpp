@@ -39,6 +39,7 @@ public:
     Vector3 steer(Vector3 from, Vector3 target) const;
     // Zone contenant le point (-1 : hors carte).
     int zoneAt(Vector3 position) const;
+    bool isOpen(int zone) const { return zone >= 0 && zones_[static_cast<size_t>(zone)].open; }
     const std::string& zoneName(int zone) const { return zones_[static_cast<size_t>(zone)].def.name; }
 
 private:
