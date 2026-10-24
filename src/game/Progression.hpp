@@ -37,6 +37,14 @@ struct ScoreEntry {
 };
 
 // Ossements, talents et records, conservés d'une partie à l'autre.
+// Réglages de l'écran Options, sauvegardés avec la progression.
+struct Settings {
+    int master = 100;  // pourcentages
+    int music = 70;
+    int effects = 100;
+    bool fullscreen = false;
+};
+
 class Progression {
 public:
     static constexpr int kLeaderboardSize = 10;
@@ -46,6 +54,10 @@ public:
 
     // persistent = faux : rien n'est lu ni écrit (mode --smoke, pour ne pas toucher la vraie sauvegarde).
     Progression(std::string savePath, bool persistent);
+
+    const Settings& settings() const { return settings_; }
+    // Remplace les réglages et sauvegarde.
+    void setSettings(const Settings& settings);
 
     int bones() const { return bones_; }
     int rank(TalentId id) const { return ranks_[static_cast<size_t>(id)]; }
@@ -88,6 +100,7 @@ public:
     float batteryMultiplier() const;
 
 private:
+    Settings settings_;
     void load();
     void save();
 

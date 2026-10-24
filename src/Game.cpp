@@ -217,6 +217,7 @@ Game::Game(const Options& options)
         mysteryBox_->applyLighting(*lighting_);
     }
     loadAudio();
+    applySettings(); // volumes et plein écran sauvegardés
 
     startNewGame();
     if (options_.smokeFrames > 0) {
@@ -472,11 +473,21 @@ void Game::update(float dt)
             talentScreen_.open();
             audio_.play("ui_click", 0.8f, 0.0f);
             state_ = State::Talents;
+        } else if (menu.openOptions) {
+            optionsScreen_.open(progression_->settings());
+            audio_.play("ui_click", 0.8f, 0.0f);
+            state_ = State::Options;
         }
         break;
     }
     case State::Talents:
         updateTalents(dt);
+        break;
+    case State::Options:
+        updateOptions(dt);
+        break;
+    case State::Credits:
+        if (creditsScreen_.update(dt)) state_ = State::Options;
         break;
     case State::Playing:
         if (IsKeyPressed(KEY_ESCAPE)) {
@@ -1020,6 +1031,31 @@ void Game::updateTalents(float dt)
     if (result.close) state_ = State::Menu;
 }
 
+void Game::updateOptions(float dt)
+{
+    const OptionsScreen::Result result = optionsScreen_.update(dt);
+    if (result.moved) audio_.play("ui_click", 0.35f, 0.1f);
+    if (result.changed) {
+        progression_->setSettings(optionsScreen_.settings());
+        applySettings();
+        audio_.play("ui_click", 0.8f, 0.0f);
+    }
+    if (result.openCredits) {
+        creditsScreen_.open();
+        state_ = State::Credits;
+    } else if (result.close) {
+        state_ = State::Menu;
+    }
+}
+
+void Game::applySettings()
+{
+    const Settings& s = progression_->settings();
+    audio_.setVolumes(static_cast<float>(s.master) / 100.0f, static_cast<float>(s.music) / 100.0f,
+                      static_cast<float>(s.effects) / 100.0f);
+    if (IsWindowFullscreen() != s.fullscreen) ToggleFullscreen();
+}
+
 void Game::endRun(bool victory)
 {
     // Une vague est « survécue » quand elle est terminée : celle en cours ne compte pas.
@@ -1331,6 +1367,10 @@ void Game::draw() const
         mainMenu_.draw(*progression_);
     } else if (state_ == State::Talents) {
         talentScreen_.draw(*progression_);
+    } else if (state_ == State::Options) {
+        optionsScreen_.draw();
+    } else if (state_ == State::Credits) {
+        creditsScreen_.draw();
     } else {
         postFx_->begin();
         ClearBackground(kBackgroundColor);

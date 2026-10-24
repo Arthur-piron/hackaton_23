@@ -5,12 +5,13 @@
 #include "raylib.h"
 
 // Écran titre : choix du mode (Nuit, Sans fin, Cauchemar une fois débloqué), personnage, talents,
-// quitter ; le tableau des scores local s'affiche à droite.
+// options et crédits, quitter ; le tableau des scores local s'affiche à droite.
 class MainMenu {
 public:
     struct Result {
         int startMode = -1;   // GameMode choisi, -1 si aucun
         bool openTalents = false;
+        bool openOptions = false;
         bool quit = false;
         bool moved = false;   // la sélection a changé (petit son)
         bool refused = false; // mode verrouillé ou personnage trop cher
@@ -23,7 +24,7 @@ public:
     void draw(const Progression& progression) const;
 
 private:
-    enum class Item { Night, Endless, Nightmare, Character, Talents, Quit, Count };
+    enum class Item { Night, Endless, Nightmare, Character, Talents, Options, Quit, Count };
 
     Rectangle itemRect(int index) const;
     const char* itemLabel(Item item) const;

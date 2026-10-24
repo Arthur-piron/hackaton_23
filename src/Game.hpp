@@ -33,8 +33,10 @@
 #include "game/Zones.hpp"
 #include "ui/BuildBar.hpp"
 #include "ui/CardPicker.hpp"
+#include "ui/CreditsScreen.hpp"
 #include "ui/Hud.hpp"
 #include "ui/MainMenu.hpp"
+#include "ui/OptionsScreen.hpp"
 #include "ui/ShopScreen.hpp"
 #include "ui/TalentScreen.hpp"
 
@@ -46,7 +48,7 @@
 // les événements de gameplay (son, caméra, HUD).
 class Game {
 public:
-    enum class State { Menu, Talents, Playing, Paused, LevelUp, Shop, GameOver, Victory };
+    enum class State { Menu, Talents, Options, Credits, Playing, Paused, LevelUp, Shop, GameOver, Victory };
 
     struct Options {
         int smokeFrames = 0;         // > 0 : mode test automatique
@@ -119,6 +121,9 @@ private:
     void drawBase() const;
     void updateShop(float dt);
     void updateTalents(float dt);
+    // Options (volumes, plein écran) et crédits, ouverts depuis le menu.
+    void updateOptions(float dt);
+    void applySettings();
     // Fin de partie : ossements gagnés, records et sauvegarde, puis écran de fin.
     void endRun(bool victory);
     void handleEvents();
@@ -184,6 +189,8 @@ private:
     float shopFrozenLeft_ = 0.0f;  // temps de pause figée restant chez le marchand
     std::unique_ptr<Progression> progression_;
     TalentScreen talentScreen_;
+    OptionsScreen optionsScreen_;
+    CreditsScreen creditsScreen_;
     MainMenu mainMenu_;
     GameMode mode_ = GameMode::Night;
     bool quitRequested_ = false;     // « Quitter » dans le menu

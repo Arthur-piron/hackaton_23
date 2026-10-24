@@ -67,7 +67,7 @@ void Audio::play(const std::string& group, float volume, float pitchVariation)
 {
     Sound* sound = pickVoice(group);
     if (!sound) return;
-    SetSoundVolume(*sound, volume);
+    SetSoundVolume(*sound, volume * effectsVolume_);
     SetSoundPitch(*sound, 1.0f + randomRange(-pitchVariation, pitchVariation));
     SetSoundPan(*sound, 0.5f);
     PlaySound(*sound);
@@ -80,7 +80,7 @@ void Audio::playAt(const std::string& group, Vector3 position, float volume, flo
     if (attenuation <= 0.0f) return;
     Sound* sound = pickVoice(group);
     if (!sound) return;
-    SetSoundVolume(*sound, volume * attenuation * attenuation);
+    SetSoundVolume(*sound, volume * attenuation * attenuation * effectsVolume_);
     SetSoundPitch(*sound, 1.0f + randomRange(-pitchVariation, pitchVariation));
     // raylib : pan = niveau du canal gauche (1 = tout à gauche, 0.5 = centre).
     const float side = std::clamp((position.x - listener_.x) / kPanRange, -1.0f, 1.0f);
@@ -110,19 +110,26 @@ void Audio::playLoop(Channel channel, const std::string& file, float volume)
     }
 }
 
+void Audio::setVolumes(float master, float music, float effects)
+{
+    if (IsAudioDeviceReady()) SetMasterVolume(master);
+    musicVolume_ = music;
+    effectsVolume_ = effects;
+}
+
 void Audio::update(float dt)
 {
     for (LoopChannel& c : channels_) {
         c.fade = std::min(1.0f, c.fade + dt / kMusicFadeSeconds);
         if (IsMusicValid(c.current)) {
-            SetMusicVolume(c.current, c.volume * c.fade);
+            SetMusicVolume(c.current, c.volume * c.fade * musicVolume_);
             UpdateMusicStream(c.current);
         }
         if (IsMusicValid(c.fading)) {
             if (c.fade >= 1.0f) {
                 unloadMusic(c.fading);
             } else {
-                SetMusicVolume(c.fading, c.fadingVolume * (1.0f - c.fade));
+                SetMusicVolume(c.fading, c.fadingVolume * (1.0f - c.fade) * musicVolume_);
                 UpdateMusicStream(c.fading);
             }
         }

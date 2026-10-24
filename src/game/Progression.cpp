@@ -48,6 +48,10 @@ void Progression::load()
 {
     if (!persistent_ || !file_.load()) return;
     bones_ = std::max(0, file_.getInt("bones", 0));
+    settings_.master = std::clamp(file_.getInt("settings.master", settings_.master), 0, 100);
+    settings_.music = std::clamp(file_.getInt("settings.music", settings_.music), 0, 100);
+    settings_.effects = std::clamp(file_.getInt("settings.effects", settings_.effects), 0, 100);
+    settings_.fullscreen = file_.getInt("settings.fullscreen", 0) != 0;
     bestWave_ = file_.getInt("best_wave", 0);
     bestScore_ = file_.getInt("best_score", 0);
     victories_ = file_.getInt("victories", 0);
@@ -71,11 +75,21 @@ void Progression::load()
     if (owns(static_cast<CharacterId>(selected))) selected_ = static_cast<CharacterId>(selected);
 }
 
+void Progression::setSettings(const Settings& settings)
+{
+    settings_ = settings;
+    save();
+}
+
 void Progression::save()
 {
     if (!persistent_) return;
     // file_ garde aussi les clés inconnues (versions futures) : on ne fait que mettre à jour les nôtres.
     file_.setInt("bones", bones_);
+    file_.setInt("settings.master", settings_.master);
+    file_.setInt("settings.music", settings_.music);
+    file_.setInt("settings.effects", settings_.effects);
+    file_.setInt("settings.fullscreen", settings_.fullscreen ? 1 : 0);
     file_.setInt("best_wave", bestWave_);
     file_.setInt("best_score", bestScore_);
     file_.setInt("victories", victories_);
