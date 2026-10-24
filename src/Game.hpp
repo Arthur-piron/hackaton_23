@@ -21,6 +21,7 @@
 #include "game/MysteryBox.hpp"
 #include "game/Shop.hpp"
 #include "game/Structures.hpp"
+#include "game/Traps.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Progression.hpp"
@@ -107,6 +108,8 @@ private:
     void takeMysteryPrize(const MysteryBox::Prize& prize);
     // Contenu d'une caisse cassée : bois, ferraille, munitions, bidon, ou explosion du tonneau de poudre.
     void breakCrate(const Crates::Broken& crate);
+    // Explosion au sol : dégâts et recul aux morts du rayon, au joueur s'il est dedans (playerDamage > 0).
+    void explode(Vector3 center, float radius, float damage, float knockback, float playerDamage, Color color);
     // Base (GAME.md §7) : mode construction et structures. Vrai si le joueur construit (arme rangée).
     bool updateBase(float dt, const Controls& c);
     void drawBase() const;
@@ -149,6 +152,7 @@ private:
     std::unique_ptr<Structures> structures_; // référence world_ : détruit avant lui
     BuildMode buildMode_;
     BuildBar buildBar_;
+    Traps traps_;
     FlowField flowField_;        // navigation des morts, recalculée toutes les kFlowFieldInterval
     float flowFieldTimer_ = 0.0f;
     std::unique_ptr<Shop> shop_;

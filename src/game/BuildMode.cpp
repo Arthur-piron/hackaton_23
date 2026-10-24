@@ -1,6 +1,7 @@
 #include "game/BuildMode.hpp"
 
 #include "core/Fonts.hpp"
+#include "game/Traps.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
 #include "raymath.h"
@@ -109,8 +110,9 @@ std::string BuildMode::checkPlacement(Vector3 center, const Surroundings& around
     for (const Vector3& point : around.keepClear) {
         if (distanceToBox(point, box) < kKeepClearDistance) return "Gardez le passage dégagé";
     }
-    if (distanceToBox(around.player, box) < kPlayerClearance) return "Pas sous tes pieds";
     const StructureInfo& s = Structures::info(selected_);
+    // Les pièges se posent même sous le joueur : on les traverse.
+    if (s.mask != 0u && distanceToBox(around.player, box) < kPlayerClearance) return "Pas sous tes pieds";
     if (economy.resource(Resource::Wood) < s.wood) return "Pas assez de bois";
     if (economy.resource(Resource::Scrap) < s.scrap) return "Pas assez de ferraille";
     if (economy.gold() < s.gold) return "Pas assez d'or";
@@ -150,6 +152,9 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
     ghost_ = snap(cursor);
     hovered_ = structures.at(cursor);
     refusal_ = list.empty() ? std::string("Bientôt disponible") : checkPlacement(ghost_, around, economy);
+    if (refusal_.empty() && category_ == BuildCategory::Traps && structures.countIn(BuildCategory::Traps) >= Traps::kMaxTraps) {
+        refusal_ = TextFormat("Au plus %d pièges", Traps::kMaxTraps);
+    }
 
     if (IsKeyPressed(KEY_X)) sell(structures, economy, events);
     if (IsKeyPressed(KEY_BACKSPACE)) undo(structures, economy, events);
