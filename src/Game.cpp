@@ -81,6 +81,15 @@ constexpr Color kRecordColor = {255, 205, 90, 255};
 constexpr int kArmoryWeapon = 1; // talent Arsenal : fusil à pompe (indice dans Arsenal::catalog)
 constexpr float kGateShake = 0.3f;
 constexpr Color kAltarHealColor = {170, 225, 255, 255};
+// Caisses (GAME.md §7.1) : 2 + nombre de zones ouvertes à chaque pause.
+constexpr int kCratesPerPause = 2;
+constexpr int kCrateChunks = 12;
+constexpr Color kCrateWoodColor = {150, 105, 60, 255};
+constexpr float kBlastCrateDamage = 60.0f;
+constexpr float kPowderRadius = 3.0f;
+constexpr float kPowderDamage = 60.0f;
+constexpr float kPowderPlayerDamage = 20.0f;
+constexpr Color kPowderColor = {255, 140, 50, 255};
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -192,6 +201,7 @@ Game::Game(const Options& options)
         lighting_->apply(merchantModel_->model());
         merchant_ = std::make_unique<Merchant>(*merchantModel_, map.merchants.front());
     }
+    crates_ = std::make_unique<Crates>(*world_);
     if (!map.altars.empty()) altar_ = std::make_unique<Altar>(map.altars.front());
     if (!map.mysteryBoxes.empty()) {
         mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
@@ -222,6 +232,7 @@ Game::Game(const Options& options)
             economy_.addGold(MysteryBox::kPrice);
             mysteryBox_->interact(mysteryBox_->position(), *zones_, economy_, events_);
         }
+        crates_->spawnWave(Crates::kMaxCrates, *zones_, player_->position());
         musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
     } else {
         musicDirector_.menu(audio_);
@@ -240,6 +251,7 @@ Game::~Game()
     merchant_.reset();
     merchantModel_.reset();
     mysteryBox_.reset();
+    crates_.reset();
     player_.reset();
     playerModel_.reset();
     zones_.reset();
@@ -308,6 +320,7 @@ void Game::startNewGame()
     zones_->reset();
     if (mysteryBox_) mysteryBox_->reset();
     if (altar_) altar_->reset();
+    crates_->clear();
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
@@ -529,6 +542,7 @@ void Game::updatePlaying(float dt)
     zones_->update(dt);
     if (mysteryBox_) mysteryBox_->update(dt, *zones_, events_);
     if (altar_) altar_->update(dt);
+    for (const Crates::Broken& crate : crates_->update(dt, events_)) breakCrate(crate);
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
@@ -649,6 +663,7 @@ void Game::resolveProjectiles()
             }
         }
         if (p.alive && blocked) {
+            crates_->hitAt(impact, p.damage);
             p.alive = false;
             events_.push_back({EventType::BulletImpact, impact, 0.0f, Vector3Normalize(p.velocity)});
         }
@@ -788,6 +803,43 @@ void Game::takeMysteryPrize(const MysteryBox::Prize& prize)
     audio_.play("reload", 0.8f, 0.0f);
     hud_.announce(prize.legendary ? "ARME LÉGENDAIRE !" : "BOÎTE MYSTÈRE", arsenal_.displayName(),
                   prize.legendary ? kGateColor : kWaveColor);
+}
+
+void Game::breakCrate(const Crates::Broken& crate)
+{
+    const Vector3 at = crate.position;
+    switch (crate.kind) {
+    case CrateKind::Wood: pickups_.spawnLoot(at, GetRandomValue(8, 15), 0); break;
+    case CrateKind::Large:
+        pickups_.spawnLoot(at, GetRandomValue(20, 35), 0);
+        if (chance(0.3f)) pickups_.spawnBattery(at);
+        break;
+    case CrateKind::Ammo:
+        // Un chargeur de réserve pour l'arme en main.
+        arsenal_.addAmmo(arsenal_.current(), arsenal_.magazineSize());
+        pickups_.spawnLoot(at, 5, 0);
+        audio_.play("reload", 0.7f, 0.0f);
+        break;
+    case CrateKind::Barrel:
+        if (chance(0.6f)) {
+            pickups_.spawnBattery(at);
+        } else {
+            pickups_.spawnLoot(at, GetRandomValue(10, 20), 0);
+        }
+        break;
+    case CrateKind::Powder:
+        cardEffects_.addBlast(Vector3Add(at, {0.0f, 1.0f, 0.0f}), kPowderRadius, kPowderColor);
+        events_.push_back({EventType::Explosion, at, kPowderRadius});
+        for (Enemy& e : waves_->enemies()) {
+            if (!e.isAlive() || flatDistance(e.position(), at) > kPowderRadius + e.radius()) continue;
+            damageEnemy(e, kPowderDamage, flatDirection(at, e.position()), kNecroticKnockback);
+        }
+        if (!player_->isDead() && flatDistance(player_->position(), at) <= kPowderRadius) {
+            hurtPlayer(kPowderPlayerDamage, at);
+        }
+        break;
+    case CrateKind::Count: break;
+    }
 }
 
 void Game::updateShop(float dt)
@@ -964,6 +1016,8 @@ void Game::handleEvents()
             break;
         case EventType::WaveCleared:
             audio_.play("ui_confirm", 0.7f, 0.0f);
+            crates_->spawnWave(kCratesPerPause + static_cast<int>(zones_->openAreas().size()), *zones_,
+                               player_->position());
             hud_.announce("VAGUE TERMINÉE", waves_->allWavesCleared() ? "L'aube se lève..." : "Reprends ton souffle",
                           kClearColor);
             break;
@@ -992,6 +1046,7 @@ void Game::handleEvents()
             audio_.playAt("hit_wood", ev.position, 0.3f, 0.15f);
             break;
         case EventType::Explosion:
+            crates_->queueBlast(ev.position, ev.value, kBlastCrateDamage);
             audio_.playAt("hit_heavy", ev.position, 0.8f, 0.2f);
             cameraRig_.shake(kExplosionShake * std::min(1.0f, ev.value / kNecroticRadius));
             lighting_->flash({Vector3Add(ev.position, {0.0f, kExplosionLightHeight, 0.0f}), kExplosionLightColor,
@@ -1033,6 +1088,14 @@ void Game::handleEvents()
             } else {
                 audio_.playAt("ui_confirm", ev.position, 0.8f, 0.1f);
             }
+            break;
+        case EventType::CrateLanded:
+            audio_.playAt("body_fall", ev.position, 0.5f, 0.2f);
+            particles_->debris(ev.position, kCrateWoodColor, 0);
+            break;
+        case EventType::CrateBroken:
+            audio_.playAt("hit_wood", ev.position, 0.9f, 0.15f);
+            particles_->debris(ev.position, kCrateWoodColor, kCrateChunks);
             break;
         case EventType::AltarUsed: {
             const float healed = player_->maxHealth() - player_->health();
@@ -1155,6 +1218,7 @@ void Game::drawWorld() const
     zones_->draw();
     if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
     if (mysteryBox_) mysteryBox_->draw(weaponModels_);
+    crates_->draw();
     waves_->draw();
     cardEffects_.draw(waves_->enemies());
     const int weapon = arsenal_.current();

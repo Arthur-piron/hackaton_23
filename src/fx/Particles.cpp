@@ -418,6 +418,42 @@ void Particles::impact(Vector3 position, Vector3 normal)
     }
 }
 
+void Particles::debris(Vector3 position, Color color, int chunks)
+{
+    for (int i = 0; i < chunks; ++i) {
+        Particle& p = spawn();
+        p.position = Vector3Add(position, {randomRange(-0.3f, 0.3f), randomRange(0.2f, 0.8f), randomRange(-0.3f, 0.3f)});
+        p.velocity = Vector3Scale(jitter({0.0f, 1.0f, 0.0f}, 1.2f), randomRange(3.0f, 7.0f));
+        p.gravity = 14.0f;
+        p.drag = 0.5f;
+        p.life = randomRange(0.7f, 1.2f);
+        p.sizeStart = randomRange(0.12f, 0.22f);
+        p.sizeEnd = 0.08f;
+        p.rotation = randomRange(0.0f, 2.0f * PI);
+        p.spin = randomRange(-8.0f, 8.0f);
+        p.colorStart = color;
+        p.colorEnd = Fade(color, 0.0f);
+        p.texture = kSplat1;
+        p.shape = Shape::Billboard;
+    }
+    for (int i = 0; i < 6; ++i) {
+        Particle& p = spawn();
+        const float angle = randomRange(0.0f, 2.0f * PI);
+        p.position = {position.x, 0.15f, position.z};
+        p.velocity = {std::cos(angle) * randomRange(1.0f, 2.5f), randomRange(0.2f, 0.6f), std::sin(angle) * randomRange(1.0f, 2.5f)};
+        p.drag = 2.5f;
+        p.life = randomRange(0.6f, 1.0f);
+        p.sizeStart = 0.4f;
+        p.sizeEnd = 1.2f;
+        p.rotation = randomRange(0.0f, 2.0f * PI);
+        p.spin = randomRange(-1.0f, 1.0f);
+        p.colorStart = kDust;
+        p.colorEnd = kDustEnd;
+        p.texture = kSmoke;
+        p.shape = Shape::Billboard;
+    }
+}
+
 void Particles::sprintDust(Vector3 feet, Vector3 direction, float dt)
 {
     const Vector3 dir = flatten(direction);
