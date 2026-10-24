@@ -13,6 +13,11 @@ struct CardModifiers {
     int ricochets = 0;                 // rebonds d'une balle qui tue
     bool doubleShot = false;           // chaque tir part en double
     float extraSpreadDegrees = 0.0f;
+    bool frost = false;                // les balles ralentissent les morts touchés
+
+    // Lampe torche
+    float batteryMultiplier = 1.0f;    // capacité de la batterie
+    float lightBonusDamage = 0.0f;     // dégâts par seconde ajoutés dans le cône (Lampe UV)
 
     // Joueur
     float moveSpeedMultiplier = 1.0f;

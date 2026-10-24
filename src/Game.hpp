@@ -10,6 +10,7 @@
 #include "game/Cards.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
+#include "game/Flashlight.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Projectile.hpp"
@@ -53,6 +54,7 @@ private:
         int selectWeapon = -1;
         int cycleWeapon = 0;
         bool interact = false;
+        bool light = false;   // lampe torche (clic droit maintenu)
     };
 
     void loadAudio();
@@ -119,6 +121,7 @@ private:
     Pickups pickups_;
     Cards cards_;
     CardEffects cardEffects_;
+    Flashlight flashlight_;
     CameraRig cameraRig_;
     Hud hud_;
     CardPicker cardPicker_;

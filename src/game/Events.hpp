@@ -26,10 +26,14 @@ enum class EventType {
     BulletImpact,  // balle arrêtée par le décor ; direction = sens de la balle
     Explosion,     // value = rayon (cadavre nécrotique, flash du Soleil de poche...)
     LastStand,     // le Dernier rempart a sauvé le joueur
+    FlashlightSwitched, // value = 1 allumée, 0 éteinte, -1 refus (batterie vide)
+    FlashlightFlicker,  // la lampe hoquette : batterie presque vide
+    BatteryPicked,      // pile de lampe ramassée
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.
-enum class HitKind { Normal, Critical, Burn };
+// Light : brûlure de la lampe (ni sang, ni son de chair).
+enum class HitKind { Normal, Critical, Burn, Light };
 
 struct Event {
     EventType type;
