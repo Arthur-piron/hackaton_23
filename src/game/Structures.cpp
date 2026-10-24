@@ -10,11 +10,15 @@
 namespace {
 // Catalogue, dans l'ordre de StructureKind. Coûts : bois / ferraille / or.
 const StructureInfo kCatalog[] = {
-    {"Palissade", BuildCategory::Defenses, 2, 1, 4, 0, 0, 150.0f, kBlocksAll, "graveyard/fence.glb"},
+    {"Palissade", BuildCategory::Defenses, 2, 1, 4, 0, 0, 150.0f, kBlocksAll, "graveyard/fence.glb", WHITE, 0},
     {"Barricade", BuildCategory::Defenses, 2, 1, 6, 2, 0, 300.0f, kBlocksPlayer | kBlocksEnemies,
-     "survival/fence-fortified.glb"},
+     "survival/fence-fortified.glb", WHITE, 0},
     {"Porte", BuildCategory::Defenses, 2, 1, 5, 3, 0, 250.0f, kBlocksEnemies | kBlocksBullets,
-     "graveyard/fence-gate.glb"},
+     "graveyard/fence-gate.glb", WHITE, 0},
+    {"Pics", BuildCategory::Traps, 1, 1, 3, 2, 0, 1.0f, 0u, "tower/detail-crystal.glb", {150, 160, 175, 255}, 25},
+    {"Mine", BuildCategory::Traps, 1, 1, 0, 4, 50, 1.0f, 0u, "blaster/grenade-b.glb", WHITE, 1},
+    {"Flaque d'huile", BuildCategory::Traps, 3, 3, 0, 2, 30, 1.0f, 0u, nullptr, WHITE, 1},
+    {"Piège à ours", BuildCategory::Traps, 1, 1, 2, 3, 0, 1.0f, 0u, nullptr, WHITE, 10},
 };
 static_assert(sizeof(kCatalog) / sizeof(kCatalog[0]) == static_cast<size_t>(StructureKind::Count),
               "une entrée de catalogue par structure");
@@ -24,6 +28,7 @@ constexpr float kThickness = 0.5f;       // épaisseur des murs 2×1, plus fine 
 constexpr float kDoorOpenDistance = 1.5f;
 constexpr float kDoorSpeed = 4.0f;       // ouverture complète en 0,25 s
 constexpr float kDoorSink = 1.2f;        // la porte ouverte s'abaisse sous le sol
+constexpr float kFlatHeight = 0.03f;     // aperçu au sol des pièges sans modèle
 
 // Dégâts par seconde aux structures, dans l'ordre d'EnemyType (GAME.md §7.4).
 constexpr float kDamagePerSecond[] = {10.0f, 9.0f, 10.0f, 50.0f, 12.0f, 0.0f};
@@ -62,7 +67,7 @@ BoundingBox Structures::footprint(StructureKind kind, Vector3 center, bool rotat
     float halfX = static_cast<float>(s.cellsX) * 0.5f;
     float halfZ = static_cast<float>(s.cellsZ) * 0.5f;
     // Les murs d'une case d'épaisseur ne remplissent pas toute la case.
-    if (s.cellsZ == 1) halfZ = std::min(halfZ, kThickness * 0.5f);
+    if (s.cellsX > 1 && s.cellsZ == 1) halfZ = std::min(halfZ, kThickness * 0.5f);
     if (rotated) std::swap(halfX, halfZ);
     return {{center.x - halfX, 0.0f, center.z - halfZ}, {center.x + halfX, kHeight, center.z + halfZ}};
 }
@@ -71,6 +76,11 @@ Structures::Structures(World& world)
     : world_(world)
 {
     for (const StructureInfo& s : kCatalog) {
+        if (!s.model) {
+            models_.push_back(nullptr);
+            modelScales_.push_back(1.0f);
+            continue;
+        }
         const Model& model = world_.model(s.model);
         const BoundingBox b = GetModelBoundingBox(model);
         const float longest = std::max(b.max.x - b.min.x, b.max.z - b.min.z);
@@ -101,6 +111,8 @@ int Structures::place(StructureKind kind, Vector3 center, bool rotated)
     item.rotated = rotated;
     item.health = info(kind).health;
     item.open = 0.0f;
+    item.trap = TrapState{};
+    item.trap.uses = info(kind).uses;
     const BoundingBox box = footprint(kind, center, rotated);
     if (item.blocker < 0) {
         item.blocker = world_.addBlocker(box, info(kind).mask);
@@ -159,6 +171,13 @@ std::vector<int> Structures::ids() const
     return list;
 }
 
+int Structures::countIn(BuildCategory category) const
+{
+    return static_cast<int>(std::count_if(items_.begin(), items_.end(), [&](const Item& i) {
+        return i.alive && info(i.kind).category == category;
+    }));
+}
+
 int Structures::blockingNear(Vector3 point, float reach) const
 {
     for (size_t i = 0; i < items_.size(); ++i) {
@@ -204,6 +223,12 @@ void Structures::update(float dt, Vector3 player)
 
 void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Color tint, float tilt) const
 {
+    if (!models_[static_cast<size_t>(kind)]) {
+        // Pas de modèle (flaque, piège à ours) : un aplat de l'emprise, pour l'aperçu.
+        const BoundingBox b = footprint(kind, center, rotated);
+        DrawPlane({center.x, kFlatHeight, center.z}, {b.max.x - b.min.x, b.max.z - b.min.z}, tint);
+        return;
+    }
     const Model& model = *models_[static_cast<size_t>(kind)];
     const float scale = modelScales_[static_cast<size_t>(kind)];
     const float yaw = rotated ? 90.0f : 0.0f;
@@ -227,12 +252,12 @@ void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Col
 void Structures::draw() const
 {
     for (const Item& item : items_) {
-        if (!item.alive) continue;
+        if (!item.alive || !models_[static_cast<size_t>(item.kind)]) continue;
         Vector3 center = item.center;
         center.y -= kDoorSink * item.open;
         if (item.shake > 0.0f) center.x += kShakeAmplitude * std::sin(item.shake * 120.0f);
         const float fraction = item.health / info(item.kind).health;
-        const Color tint = fraction < kCrackedFraction ? kCrackedTint : WHITE;
+        const Color tint = fraction < kCrackedFraction ? ColorTint(info(item.kind).tint, kCrackedTint) : info(item.kind).tint;
         drawModel(item.kind, center, item.rotated, tint, fraction < kRuinedFraction ? kRuinTilt : 0.0f);
     }
 }

@@ -244,6 +244,13 @@ Game::Game(const Options& options)
             structures_->place(static_cast<StructureKind>(i),
                                Vector3Add(player_->position(), {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
         }
+        // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
+        const Vector3 me = player_->position();
+        structures_->place(StructureKind::Spikes, Vector3Add(me, {-1.5f, 0.0f, -2.5f}), false);
+        structures_->place(StructureKind::Mine, Vector3Add(me, {0.5f, 0.0f, -3.5f}), false);
+        structures_->place(StructureKind::BearTrap, Vector3Add(me, {1.5f, 0.0f, -2.5f}), false);
+        structures_->place(StructureKind::OilSlick, Vector3Add(me, {-3.5f, 0.0f, -3.5f}), false);
+        traps_.igniteAt(Vector3Add(me, {-3.5f, 0.0f, -3.5f}), 0.5f);
         // Des morts derrière la palissade : ils la frappent pour passer (barre de PV sur la capture).
         waves_->spawnRing(Vector3Add(player_->position(), {2.0f, 0.0f, 4.0f}), 0.6f, 3, EnemyType::Walker);
         musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
@@ -336,6 +343,7 @@ void Game::startNewGame()
     if (altar_) altar_->reset();
     crates_->clear();
     structures_->clear();
+    traps_.clear();
     buildMode_.reset();
     flowFieldTimer_ = 0.0f;
     arsenal_.reset();
@@ -498,6 +506,7 @@ void Game::updateLighting(float dt)
     for (const PointLight& lantern : flyingLanterns_.lights()) lighting_->addLight(lantern);
     if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
     if (altar_) lighting_->addLight(altar_->light());
+    for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -551,6 +560,8 @@ void Game::updatePlaying(float dt)
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
         } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
             takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
+        } else if (traps_.igniteNear(player_->position(), *structures_)) {
+            // E près d'une flaque d'huile : elle s'enflamme.
         } else if (altar_ && altar_->inReach(player_->position())) {
             altar_->tryUse(player_->position(), player_->health() < player_->maxHealth(), *zones_, events_);
         } else {
@@ -846,15 +857,7 @@ void Game::breakCrate(const Crates::Broken& crate)
         }
         break;
     case CrateKind::Powder:
-        cardEffects_.addBlast(Vector3Add(at, {0.0f, 1.0f, 0.0f}), kPowderRadius, kPowderColor);
-        events_.push_back({EventType::Explosion, at, kPowderRadius});
-        for (Enemy& e : waves_->enemies()) {
-            if (!e.isAlive() || flatDistance(e.position(), at) > kPowderRadius + e.radius()) continue;
-            damageEnemy(e, kPowderDamage, flatDirection(at, e.position()), kNecroticKnockback);
-        }
-        if (!player_->isDead() && flatDistance(player_->position(), at) <= kPowderRadius) {
-            hurtPlayer(kPowderPlayerDamage, at);
-        }
+        explode(at, kPowderRadius, kPowderDamage, kNecroticKnockback, kPowderPlayerDamage, kPowderColor);
         break;
     case CrateKind::Count: break;
     }
@@ -874,6 +877,14 @@ bool Game::updateBase(float dt, const Controls& c)
         const int id = structures_->blockingNear(e.position(), e.radius() + kStructureReach);
         if (id >= 0) structures_->damage(id, Structures::damagePerSecond(e.type()) * dt, events_);
     }
+    const Traps::Result trapped = traps_.update(dt, *structures_, waves_->enemies(), events_);
+    for (const Traps::Hit& hit : trapped.hits) {
+        if (hit.ignite && hit.enemy->isAlive()) cardEffects_.ignite(*hit.enemy);
+        damageEnemy(*hit.enemy, hit.damage, {0.0f, 0.0f, 0.0f}, 0.0f, hit.ignite ? HitKind::Burn : HitKind::Normal);
+    }
+    for (const Traps::Blast& blast : trapped.blasts) {
+        explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor);
+    }
     if (player_->isDead()) {
         buildMode_.reset();
         return false;
@@ -890,7 +901,21 @@ bool Game::updateBase(float dt, const Controls& c)
 void Game::drawBase() const
 {
     structures_->draw();
+    traps_.draw(*structures_);
     buildMode_.drawWorld(*structures_);
+}
+
+void Game::explode(Vector3 center, float radius, float damage, float knockback, float playerDamage, Color color)
+{
+    cardEffects_.addBlast(Vector3Add(center, {0.0f, 1.0f, 0.0f}), radius, color);
+    events_.push_back({EventType::Explosion, center, radius});
+    for (Enemy& e : waves_->enemies()) {
+        if (!e.isAlive() || flatDistance(e.position(), center) > radius + e.radius()) continue;
+        damageEnemy(e, damage, flatDirection(center, e.position()), knockback);
+    }
+    if (playerDamage > 0.0f && !player_->isDead() && flatDistance(player_->position(), center) <= radius) {
+        hurtPlayer(playerDamage, center);
+    }
 }
 
 void Game::updateShop(float dt)
@@ -1102,6 +1127,7 @@ void Game::handleEvents()
             break;
         case EventType::Explosion:
             crates_->queueBlast(ev.position, ev.value, kBlastCrateDamage);
+            traps_.igniteAt(ev.position, ev.value);
             audio_.playAt("hit_heavy", ev.position, 0.8f, 0.2f);
             cameraRig_.shake(kExplosionShake * std::min(1.0f, ev.value / kNecroticRadius));
             lighting_->flash({Vector3Add(ev.position, {0.0f, kExplosionLightHeight, 0.0f}), kExplosionLightColor,
@@ -1157,6 +1183,11 @@ void Game::handleEvents()
         case EventType::StructureRemoved:
             audio_.play("pickup", 0.6f, 0.1f);
             particles_->debris(ev.position, kCrateWoodColor, kCrateChunks / 2);
+            break;
+        case EventType::TrapTriggered:
+            audio_.playAt(static_cast<StructureKind>(static_cast<int>(ev.value)) == StructureKind::Mine ? "dry_fire"
+                                                                                                         : "hit_heavy",
+                          ev.position, 0.6f, 0.2f);
             break;
         case EventType::StructureDamaged:
             audio_.playAt("hit_wood", ev.position, 0.5f, 0.2f);

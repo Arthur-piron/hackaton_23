@@ -4,6 +4,7 @@
 #include "game/Events.hpp"
 #include "raylib.h"
 
+#include <utility>
 #include <vector>
 
 class World;
@@ -11,7 +12,7 @@ class World;
 // Catégories du mode construction (docs/GAME.md §7.2), dans l'ordre des touches 1 à 4.
 enum class BuildCategory { Defenses, Turrets, Traps, Utilities, Count };
 
-enum class StructureKind { Palisade, Barricade, Door, Count };
+enum class StructureKind { Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Count };
 
 // Description d'une structure du catalogue (GAME.md §7.3).
 struct StructureInfo {
@@ -23,8 +24,18 @@ struct StructureInfo {
     int scrap;
     int gold;
     float health;
-    unsigned mask;     // ce que la structure arrête (BlockMask)
-    const char* model; // relatif à assets/models/
+    unsigned mask;     // ce que la structure arrête (BlockMask) ; 0 pour les pièges, qu'on traverse
+    const char* model; // relatif à assets/models/ ; nul : dessiné par Traps
+    Color tint;
+    int uses;          // pièges : passages ou prises avant de s'user (0 : sans objet)
+};
+
+// État d'un piège posé, mis à jour par Traps.
+struct TrapState {
+    int uses = 0;
+    float timer = 0.0f;  // réarmement, mèche de la mine ou durée du feu
+    bool active = false; // mine qui bipe, flaque en feu, mâchoires refermées
+    std::vector<std::pair<unsigned, float>> cooldowns; // pics : (mort, délai avant un nouveau coup)
 };
 
 // Les structures posées par le joueur : collision dans World, rendu (fissurée, en ruine),
@@ -54,6 +65,10 @@ public:
     float healthFraction(int id) const;
     BoundingBox bounds(int id) const;
     std::vector<int> ids() const;
+    int countIn(BuildCategory category) const;
+    Vector3 center(int id) const { return items_[static_cast<size_t>(id)].center; }
+    TrapState& trap(int id) { return items_[static_cast<size_t>(id)].trap; }
+    const TrapState& trap(int id) const { return items_[static_cast<size_t>(id)].trap; }
     // Structure qui arrête les morts à moins de `reach` du point (-1 : aucune).
     int blockingNear(Vector3 point, float reach) const;
     // Inflige des dégâts ; publie StructureDamaged (au plus deux fois par seconde) et
@@ -79,6 +94,7 @@ private:
         float open = 0.0f; // porte : 0 fermée, 1 ouverte
         float hitCooldown = 0.0f;
         float shake = 0.0f;
+        TrapState trap;
     };
 
     World& world_;
