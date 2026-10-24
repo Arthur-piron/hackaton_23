@@ -6,7 +6,7 @@
 #include <cstddef>
 
 namespace {
-// Chances de rareté à chaque tirage (en %), le reste est commun.
+// Chances de rareté à chaque tirage (en %), le reste est commun.
 constexpr int kLegendaryChance = 5;
 constexpr int kRareChance = 25;
 
@@ -33,46 +33,46 @@ using K = CardCategory;
 const std::vector<CardInfo>& buildCatalog()
 {
     static const std::vector<CardInfo> cards = {
-        {C::SteadyHand, "Main sure", "DMG", "Degats +12 %", R::Common, K::Weapon, 3, true, {}},
-        {C::NervousTrigger, "Gachette nerveuse", "CAD", "Cadence de tir +10 %", R::Common, K::Weapon, 3, true, {}},
-        {C::WolfStep, "Pas de loup", "VIT", "Vitesse de deplacement +15 %", R::Common, K::Mobility, 3, true, {}},
+        {C::SteadyHand, "Main sûre", "DMG", "Dégâts +12 %", R::Common, K::Weapon, 3, true, {}},
+        {C::NervousTrigger, "Gâchette nerveuse", "CAD", "Cadence de tir +10 %", R::Common, K::Weapon, 3, true, {}},
+        {C::WolfStep, "Pas de loup", "VIT", "Vitesse de déplacement +15 %", R::Common, K::Mobility, 3, true, {}},
         {C::ToughSkin, "Peau dure", "PV", "Vie max +25 et soigne 25 PV", R::Common, K::Survival, 3, true, {}},
-        {C::DeepPockets, "Poches profondes", "CHG", "Chargeurs +25 %", R::Common, K::Weapon, 3, true, {}},
-        {C::QuickHands, "Main leste", "REC", "Rechargement 15 % plus rapide", R::Common, K::Weapon, 3, true, {}},
-        {C::Miser, "Avare", "OR", "Or gagne +15 %", R::Common, K::Fortune, 3, true, {}},
-        {C::Magnet, "Aimant", "AIM", "Rayon d'aimantation de l'or et de l'XP +50 %", R::Common, K::Fortune, 2, true,
+        {C::DeepPockets, "Poches profondes", "CHG", "Chargeurs +25 %", R::Common, K::Weapon, 3, true, {}},
+        {C::QuickHands, "Main leste", "REC", "Rechargement 15 % plus rapide", R::Common, K::Weapon, 3, true, {}},
+        {C::Miser, "Avare", "OR", "Or gagné +15 %", R::Common, K::Fortune, 3, true, {}},
+        {C::Magnet, "Aimant", "AIM", "Rayon d'aimantation de l'or et de l'XP +50 %", R::Common, K::Fortune, 2, true,
          {}},
-        {C::LongBattery, "Pile longue duree", "BAT", "Batterie de la lampe +30 %", R::Common, K::Light, 3, false, {}},
-        {C::SecondWind, "Second souffle", "END", "Endurance +30 %, recuperation +20 %", R::Common, K::Mobility, 2,
+        {C::LongBattery, "Pile longue durée", "BAT", "Batterie de la lampe +30 %", R::Common, K::Light, 3, false, {}},
+        {C::SecondWind, "Second souffle", "END", "Endurance +30 %, récupération +20 %", R::Common, K::Mobility, 2,
          true, {}},
-        {C::Incendiary, "Balles incendiaires", "FEU", "Les balles enflamment : 6 degats/s pendant 3 s", R::Rare,
+        {C::Incendiary, "Balles incendiaires", "FEU", "Les balles enflamment : 6 dégâts/s pendant 3 s", R::Rare,
          K::Weapon, 1, true, {}},
         {C::Ricochet, "Ricochet", "RIC", "Une balle qui tue rebondit vers l'ennemi le plus proche (8 m)", R::Rare,
          K::Weapon, 2, true, {}},
         {C::Piercing, "Perforation", "PER", "Les balles traversent +1 ennemi", R::Rare, K::Weapon, 2, true, {}},
-        {C::UvLamp, "Lampe UV", "UV", "Le cone de lumiere inflige 15 degats/s", R::Rare, K::Light, 2, false, {}},
-        {C::Vampirism, "Vampirisme", "VAM", "Chaque mort rend 1 % de la vie max", R::Rare, K::Occult, 3, true, {}},
-        {C::BottomlessMag, "Chargeur sans fond", "INF", "10 % de chances qu'un tir ne consomme pas de balle",
+        {C::UvLamp, "Lampe UV", "UV", "Le cône de lumière inflige 15 dégâts/s", R::Rare, K::Light, 2, false, {}},
+        {C::Vampirism, "Vampirisme", "VAM", "Chaque mort rend 1 % de la vie max", R::Rare, K::Occult, 3, true, {}},
+        {C::BottomlessMag, "Chargeur sans fond", "INF", "10 % de chances qu'un tir ne consomme pas de balle",
          R::Rare, K::Weapon, 3, true, {}},
-        {C::FlyingLantern, "Lanterne volante", "LAN", "Une lanterne orbite autour de toi, eclaire et brule",
+        {C::FlyingLantern, "Lanterne volante", "LAN", "Une lanterne orbite autour de toi, éclaire et brûle",
          R::Rare, K::Light, 2, false, {}},
-        {C::NecroticBlast, "Explosion necrotique", "NEC", "20 % des morts explosent (2,5 m, 40 degats)", R::Rare,
+        {C::NecroticBlast, "Explosion nécrotique", "NEC", "20 % des morts explosent (2,5 m, 40 dégâts)", R::Rare,
          K::Occult, 2, true, {}},
-        {C::Frost, "Gel", "GEL", "Les balles ralentissent de 30 % pendant 1,5 s", R::Rare, K::Weapon, 1, false, {}},
-        {C::CriticalHit, "Coup critique", "CRT", "10 % de chances d'infliger x3 degats", R::Rare, K::Weapon, 3, true,
+        {C::Frost, "Gel", "GEL", "Les balles ralentissent de 30 % pendant 1,5 s", R::Rare, K::Weapon, 1, false, {}},
+        {C::CriticalHit, "Coup critique", "CRT", "10 % de chances d'infliger x3 dégâts", R::Rare, K::Weapon, 3, true,
          {}},
         {C::LastStand, "Dernier rempart", "REM",
-         "Une fois par vague, un coup mortel te laisse a 1 PV et repousse tout le monde", R::Legendary, K::Survival,
+         "Une fois par vague, un coup mortel te laisse à 1 PV et repousse tout le monde", R::Legendary, K::Survival,
          1, true, {}},
-        {C::FireChain, "Chaine de feu", "CHN", "Les rebonds enflamment et le feu se propage a 3 cibles",
+        {C::FireChain, "Chaîne de feu", "CHN", "Les rebonds enflamment et le feu se propage à 3 cibles",
          R::Legendary, K::Occult, 1, true, {C::Incendiary, C::Ricochet}},
-        {C::PocketSun, "Soleil de poche", "SOL", "Toutes les 20 s, un flash brule tout dans un rayon de 8 m",
+        {C::PocketSun, "Soleil de poche", "SOL", "Toutes les 20 s, un flash brûle tout dans un rayon de 8 m",
          R::Legendary, K::Light, 1, true, {}},
-        {C::LeadRain, "Pluie de plomb", "x2", "Chaque tir part en double, dispersion +5 degres", R::Legendary,
+        {C::LeadRain, "Pluie de plomb", "x2", "Chaque tir part en double, dispersion +5 degrés", R::Legendary,
          K::Weapon, 1, true, {}},
-        {C::Reaper, "Faucheuse", "FAU", "Les ennemis sous 15 % de vie meurent au contact d'une balle", R::Legendary,
+        {C::Reaper, "Faucheuse", "FAU", "Les ennemis sous 15 % de vie meurent au contact d'une balle", R::Legendary,
          K::Occult, 1, true, {}},
-        {C::DeadMansFortune, "Fortune du mort", "FOR", "Chaque combo x5 fait pleuvoir 50 pieces", R::Legendary,
+        {C::DeadMansFortune, "Fortune du mort", "FOR", "Chaque combo x5 fait pleuvoir 50 pièces", R::Legendary,
          K::Fortune, 1, true, {}},
     };
     return cards;

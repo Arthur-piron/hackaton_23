@@ -1,6 +1,7 @@
 #include "Game.hpp"
 
 #include "core/AssetPath.hpp"
+#include "core/Fonts.hpp"
 #include "raylib.h"
 #include "raymath.h"
 
@@ -131,6 +132,7 @@ Game::Game(const Options& options)
 {
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(kScreenWidth, kScreenHeight, kWindowTitle);
+    fonts::load();
     InitAudioDevice();
     SetTargetFPS(kTargetFps);
     SetExitKey(KEY_NULL); // Échap sert à la pause, pas à quitter.
@@ -189,6 +191,7 @@ Game::~Game()
     zones_.reset();
     world_.reset();
     CloseAudioDevice();
+    fonts::unload();
     CloseWindow();
 }
 
@@ -758,7 +761,7 @@ void Game::handleEvents()
             break;
         case EventType::WaveCleared:
             audio_.play("ui_confirm", 0.7f, 0.0f);
-            hud_.announce("VAGUE TERMINEE", waves_->allWavesCleared() ? "L'aube se leve..." : "Reprends ton souffle",
+            hud_.announce("VAGUE TERMINÉE", waves_->allWavesCleared() ? "L'aube se lève..." : "Reprends ton souffle",
                           kClearColor);
             break;
         case EventType::GoldPicked:
@@ -870,7 +873,7 @@ void Game::draw() const
         if (state_ == State::LevelUp) cardPicker_.draw();
         if (state_ == State::Paused) drawPauseOverlay();
         if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
-        if (state_ == State::Victory) drawEndScreen("L'AUBE SE LEVE", {255, 210, 120, 255});
+        if (state_ == State::Victory) drawEndScreen("L'AUBE SE LÈVE", {255, 210, 120, 255});
     }
 
     DrawFPS(10, 10);
@@ -915,13 +918,13 @@ void Game::drawMenu() const
     const int w = GetScreenWidth();
     const int h = GetScreenHeight();
     const char* title = "LAST LIGHT";
-    DrawText(title, (w - MeasureText(title, 96)) / 2, h / 4, 96, {230, 200, 120, 255});
-    const char* tagline = "Les morts craignent la lumiere. Tiens jusqu'a l'aube.";
-    DrawText(tagline, (w - MeasureText(tagline, 22)) / 2, h / 4 + 110, 22, {180, 170, 150, 255});
-    const char* hint = "Entree pour commencer";
-    DrawText(hint, (w - MeasureText(hint, 28)) / 2, h / 2 + 20, 28, RAYWHITE);
+    fonts::drawText(title, (w - fonts::measureText(title, 96)) / 2, h / 4, 96, {230, 200, 120, 255});
+    const char* tagline = "Les morts craignent la lumière. Tiens jusqu'à l'aube.";
+    fonts::drawText(tagline, (w - fonts::measureText(tagline, 22)) / 2, h / 4 + 110, 22, {180, 170, 150, 255});
+    const char* hint = "Entrée pour commencer";
+    fonts::drawText(hint, (w - fonts::measureText(hint, 28)) / 2, h / 2 + 20, 28, RAYWHITE);
     const char* controls = "ZQSD : bouger   Maj : sprint   Souris : viser / tirer   R : recharger   1-4 : armes   E : grille";
-    DrawText(controls, (w - MeasureText(controls, 18)) / 2, h - 60, 18, {140, 135, 125, 255});
+    fonts::drawText(controls, (w - fonts::measureText(controls, 18)) / 2, h - 60, 18, {140, 135, 125, 255});
     DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
 }
 
@@ -931,9 +934,9 @@ void Game::drawPauseOverlay() const
     const int h = GetScreenHeight();
     DrawRectangle(0, 0, w, h, {0, 0, 0, 150});
     const char* text = "PAUSE";
-    const char* hint = "Echap : reprendre   Ctrl+Q : menu";
-    DrawText(text, (w - MeasureText(text, 60)) / 2, h / 2 - 60, 60, RAYWHITE);
-    DrawText(hint, (w - MeasureText(hint, 20)) / 2, h / 2 + 10, 20, LIGHTGRAY);
+    const char* hint = "Échap : reprendre   Ctrl+Q : menu";
+    fonts::drawText(text, (w - fonts::measureText(text, 60)) / 2, h / 2 - 60, 60, RAYWHITE);
+    fonts::drawText(hint, (w - fonts::measureText(hint, 20)) / 2, h / 2 + 10, 20, LIGHTGRAY);
 }
 
 void Game::drawEndScreen(const char* title, Color color) const
@@ -941,9 +944,9 @@ void Game::drawEndScreen(const char* title, Color color) const
     const int w = GetScreenWidth();
     const int h = GetScreenHeight();
     DrawRectangle(0, 0, w, h, {0, 0, 0, 170});
-    DrawText(title, (w - MeasureText(title, 80)) / 2, h / 3, 80, color);
+    fonts::drawText(title, (w - fonts::measureText(title, 80)) / 2, h / 3, 80, color);
     const char* stats = TextFormat("Vague %d   -   %d morts   -   score %d", waves_->wave(), kills_, score_);
-    DrawText(stats, (w - MeasureText(stats, 26)) / 2, h / 3 + 110, 26, RAYWHITE);
-    const char* hint = "Entree : rejouer   Echap : menu";
-    DrawText(hint, (w - MeasureText(hint, 22)) / 2, h / 3 + 170, 22, LIGHTGRAY);
+    fonts::drawText(stats, (w - fonts::measureText(stats, 26)) / 2, h / 3 + 110, 26, RAYWHITE);
+    const char* hint = "Entrée : rejouer   Échap : menu";
+    fonts::drawText(hint, (w - fonts::measureText(hint, 22)) / 2, h / 3 + 170, 22, LIGHTGRAY);
 }

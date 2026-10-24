@@ -42,7 +42,7 @@ enum class CardCategory { Weapon, Survival, Mobility, Fortune, Light, Occult };
 
 struct CardInfo {
     CardId id;
-    const char* name;        // sans accents : la police par défaut de raylib est ASCII
+    const char* name;        // UTF-8 : la police du jeu (core/Fonts) a les accents
     const char* shortName;   // 3 lettres pour les pastilles du HUD
     const char* description; // effet d'un rang, avec les chiffres
     CardRarity rarity;

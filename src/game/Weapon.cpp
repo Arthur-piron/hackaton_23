@@ -38,7 +38,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
         list.push_back(pistol);
 
         WeaponStats shotgun;
-        shotgun.name = "Fusil a pompe";
+        shotgun.name = "Fusil à pompe";
         shotgun.model = "blaster-d.glb";
         shotgun.damage = 18.0f;
         shotgun.fireInterval = 0.85f;
