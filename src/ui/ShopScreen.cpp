@@ -1,5 +1,7 @@
 #include "ui/ShopScreen.hpp"
 
+#include "core/Fonts.hpp"
+
 #include "ui/CardPicker.hpp"
 
 #include <algorithm>
@@ -48,8 +50,8 @@ constexpr Color kGoldDark = {170, 110, 20, 255};
 constexpr Color kDenied = {235, 80, 80, 255};
 constexpr Color kOwned = {120, 220, 110, 255};
 
-const char* const kColumnTitles[] = {"ARMES", "AMELIORATIONS", "CONSOMMABLES"};
-const char* const kColumnHints[] = {"Debloquees dans l'arsenal", "", "Effet immediat"};
+const char* const kColumnTitles[] = {"ARMES", "AMÉLIORATIONS", "CONSOMMABLES"};
+const char* const kColumnHints[] = {"Débloquées dans l'arsenal", "", "Effet immédiat"};
 
 Color fade(Color c, float alpha)
 {
@@ -65,6 +67,8 @@ Color mix(Color a, Color b, float t)
     return {lerp(a.r, b.r), lerp(a.g, b.g), lerp(a.b, b.b), lerp(a.a, b.a)};
 }
 
+constexpr float kTextScale = 0.8f;
+
 float easeOutBack(float t)
 {
     const float c = 1.4f;
@@ -74,12 +78,13 @@ float easeOutBack(float t)
 
 Vector2 measure(const char* text, float size)
 {
-    return MeasureTextEx(GetFontDefault(), text, size, size / 10.0f);
+    return fonts::measureTextEx(text, size * kTextScale);
 }
 
 void drawText(const char* text, float x, float y, float size, Color color)
 {
-    DrawTextEx(GetFontDefault(), text, {std::round(x), std::round(y)}, size, size / 10.0f, color);
+    // Les tailles ont été réglées pour la police raylib, plus étroite que Kenney Future.
+    fonts::drawTextEx(text, {std::round(x), std::round(y)}, size * kTextScale, color);
 }
 
 void drawRight(const char* text, float right, float y, float size, Color color)
@@ -215,7 +220,7 @@ void drawIcon(const ShopItem& item, int weapon, Vector2 c, float r, Color color,
 const char* statusLabel(ShopAvailability availability)
 {
     switch (availability) {
-    case ShopAvailability::Owned: return "POSSEDE";
+    case ShopAvailability::Owned: return "POSSÉDÉ";
     case ShopAvailability::Maxed: return "MAX";
     case ShopAvailability::Full: return "PLEIN";
     case ShopAvailability::Unavailable: return "--";
@@ -396,11 +401,11 @@ void ShopScreen::drawHeader(int gold, float frozenLeft, float waveIn) const
     const float top = first.y - 104.0f;
 
     drawCentered("LE MARCHAND", cx, top, 50.0f, fade(kTitle, alpha));
-    drawCentered("Achete, ameliore, survis.", cx, top + 58.0f, 20.0f, fade(kTextDim, alpha));
+    drawCentered("Achète, améliore, survis.", cx, top + 58.0f, 20.0f, fade(kTextDim, alpha));
 
     // À gauche : le temps figé, puis le compte à rebours de la vague quand il est épuisé.
     if (frozenLeft > 0.0f) {
-        drawText("TEMPS FIGE", first.x, top + 8.0f, 16.0f, fade(kTextDim, alpha));
+        drawText("TEMPS FIGÉ", first.x, top + 8.0f, 16.0f, fade(kTextDim, alpha));
         drawText(TextFormat("%d s", static_cast<int>(std::ceil(frozenLeft))), first.x, top + 28.0f, 36.0f,
                  fade(kText, alpha));
     } else {
@@ -537,7 +542,7 @@ void ShopScreen::drawRow(int columnIndex, int row, const Shop& shop) const
                  fade(kTextDim, alpha));
     }
     if (selected && available) {
-        const char* hint = offer.affordable ? "ENTREE : acheter" : "Pas assez d'or";
+        const char* hint = offer.affordable ? "ENTRÉE : acheter" : "Pas assez d'or";
         drawRight(hint, right, bottom - 1.0f, 14.0f, fade(offer.affordable ? kText : kDenied, alpha * 0.85f));
     }
 
@@ -562,7 +567,7 @@ void ShopScreen::draw(const Shop& shop, const Arsenal& arsenal, int gold, float 
         const float a = std::clamp((kMessageDuration - messageAge_) / 0.4f, 0.0f, 1.0f);
         drawCentered(message_.c_str(), cx, below + 12.0f, 22.0f, fade(messageColor_, a));
     }
-    drawCentered("Fleches / ZQSD : choisir    Entree / clic : acheter    Tab / 1-4 : arme    E / Echap : fermer", cx,
+    drawCentered("Flèches / ZQSD : choisir    Entrée / clic : acheter    Tab / 1-4 : arme    E / Échap : fermer", cx,
                  static_cast<float>(h) - 30.0f, 16.0f, fade(kTextDim, std::min(1.0f, time_ / kDimDuration)));
 
     const Vector2 m = GetMousePosition();
