@@ -560,7 +560,7 @@ void Game::updateLighting(float dt)
     if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
     if (altar_) lighting_->addLight(altar_->light());
     for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
-    for (const PointLight& lamp : generator_.lights(*structures_)) lighting_->addLight(lamp);
+    for (const PointLight& electric : generator_.lights(*structures_)) lighting_->addLight(electric);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
