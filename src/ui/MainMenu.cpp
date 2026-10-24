@@ -6,11 +6,11 @@
 #include <cmath>
 
 namespace {
-constexpr int kItemCount = 6; // MainMenu::Item::Count
+constexpr int kItemCount = 7; // MainMenu::Item::Count
 constexpr int kCharacterCount = static_cast<int>(CharacterId::Count);
 constexpr float kItemWidth = 380.0f;
-constexpr float kItemHeight = 48.0f;
-constexpr float kItemGap = 8.0f;
+constexpr float kItemHeight = 44.0f;
+constexpr float kItemGap = 6.0f;
 constexpr float kMenuTop = 240.0f;
 constexpr float kBoardWidth = 420.0f;
 constexpr float kBoardRowHeight = 28.0f;
@@ -69,6 +69,7 @@ const char* MainMenu::itemLabel(Item item) const
     case Item::Nightmare: return gameModeRules(GameMode::Nightmare).name;
     case Item::Character: return "Personnage";
     case Item::Talents: return "Talents";
+    case Item::Options: return "Options et crédits";
     case Item::Quit: return "Quitter";
     case Item::Count: break;
     }
@@ -137,6 +138,7 @@ MainMenu::Result MainMenu::update(float dt, const Progression& progression)
         break;
     }
     case Item::Talents: result.openTalents = true; break;
+    case Item::Options: result.openOptions = true; break;
     case Item::Quit: result.quit = true; break;
     case Item::Character:
     case Item::Count: break;
@@ -164,11 +166,11 @@ void MainMenu::draw(const Progression& progression) const
             DrawRectangleRoundedLinesEx(r, 0.2f, 6, 2.0f, Fade(kBorder, pulse));
         }
         const float right = r.x + r.width - 18.0f;
-        const float detailY = r.y + 17.0f;
+        const float detailY = r.y + 15.0f;
         if (item == Item::Character) {
             // « < Vampire > » : le personnage affiché, et son prix s'il n'est pas acheté.
             const CharacterInfo& c = characterInfo(shown);
-            fonts::drawTextEx(TextFormat("<  %s  >", c.name), {r.x + 22.0f, r.y + 12.0f}, 24.0f,
+            fonts::drawTextEx(TextFormat("<  %s  >", c.name), {r.x + 22.0f, r.y + 10.0f}, 24.0f,
                               progression.owns(shown) ? kText : kLocked);
             if (!progression.owns(shown)) {
                 drawRight(TextFormat("%d os", c.cost), right, detailY, 15.0f,
@@ -178,7 +180,7 @@ void MainMenu::draw(const Progression& progression) const
             }
             continue;
         }
-        fonts::drawTextEx(itemLabel(item), {r.x + 22.0f, r.y + 12.0f}, 24.0f, locked ? kLocked : kText);
+        fonts::drawTextEx(itemLabel(item), {r.x + 22.0f, r.y + 10.0f}, 24.0f, locked ? kLocked : kText);
         if (locked) {
             drawRight("Gagne une Nuit", right, detailY, 15.0f, kLocked);
         } else if (item == Item::Talents) {

@@ -34,6 +34,8 @@ public:
     void playAmbience(const std::string& file, float volume = 0.3f) { playLoop(Channel::Ambience, file, volume); }
     void playLoop(Channel channel, const std::string& file, float volume);
     void update(float dt);
+    // Réglages de l'écran Options (0..1) : volume général, musique et ambiance, effets.
+    void setVolumes(float master, float music, float effects);
 
 private:
     // Une piste qui entre en fondu pendant que la précédente sort.
@@ -60,6 +62,8 @@ private:
 
     std::unordered_map<std::string, Group> groups_;
     Vector3 listener_ = {0.0f, 0.0f, 0.0f};
+    float musicVolume_ = 1.0f;
+    float effectsVolume_ = 1.0f;
 
     LoopChannel channels_[static_cast<size_t>(Channel::Count)];
 };
