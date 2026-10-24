@@ -7,6 +7,7 @@
 #include "fx/PostFx.hpp"
 #include "game/CameraRig.hpp"
 #include "game/CardEffects.hpp"
+#include "game/Altar.hpp"
 #include "game/Cards.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
@@ -133,6 +134,7 @@ private:
     std::unique_ptr<Player> player_;
     std::unique_ptr<Merchant> merchant_; // nul si la carte n'en déclare pas
     std::unique_ptr<MysteryBox> mysteryBox_; // nulle si la carte n'en déclare pas ; référence world_
+    std::unique_ptr<Altar> altar_;           // nul si la carte n'en déclare pas
     std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;
