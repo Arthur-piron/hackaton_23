@@ -129,8 +129,8 @@ private:
     void drawPauseOverlay() const;
     void drawEndScreen(const char* title, Color color) const;
     HudData hudData() const;
-    // Point du sol (y = 0) sous le curseur de la souris.
-    Vector3 mouseGroundPoint() const;
+    // Point visé : le torse du mort sous le curseur, sinon le curseur projeté à hauteur du canon.
+    Vector3 mouseAimPoint() const;
 
     Options options_;
     int frameCount_ = 0;

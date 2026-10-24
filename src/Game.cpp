@@ -24,6 +24,7 @@ constexpr float kHurtShake = 0.45f;
 constexpr float kDeathShake = 0.8f;
 constexpr float kLookAhead = 0.25f;   // fraction de la distance de visée ajoutée au cadrage
 constexpr float kMaxLookAhead = 3.0f;
+constexpr float kAimAssistScale = 1.4f; // le survol d'un mort compte un peu au-delà de son corps
 constexpr float kFootstepInterval = 0.36f;
 constexpr float kSprintFootstepInterval = 0.26f;
 constexpr int kSmokeWeapon = 2; // mitraillette
@@ -365,19 +366,35 @@ void Game::startNewGame()
     bonesEarned_ = 0;
 }
 
-Vector3 Game::mouseGroundPoint() const
+Vector3 Game::mouseAimPoint() const
 {
     const Ray ray = GetScreenToWorldRay(GetMousePosition(), cameraRig_.camera());
+    // Un mort sous le curseur : on vise son torse, pas le sol derrière lui.
+    float nearest = 1e9f;
+    Vector3 target = {0.0f, 0.0f, 0.0f};
+    bool onEnemy = false;
+    for (const Enemy& e : waves_->enemies()) {
+        if (!e.isAlive()) continue;
+        const RayCollision hit = GetRayCollisionSphere(ray, e.hitCenter(), e.radius() * kAimAssistScale);
+        if (hit.hit && hit.distance < nearest) {
+            nearest = hit.distance;
+            target = e.hitCenter();
+            onEnemy = true;
+        }
+    }
+    if (onEnemy) return target;
+    // Sinon, le curseur est projeté à hauteur du canon : les balles volent là, pas au ras du sol.
+    const float height = player_->muzzle().y;
     if (std::fabs(ray.direction.y) < 1e-4f) return player_->position();
-    const float t = -ray.position.y / ray.direction.y;
-    return {ray.position.x + ray.direction.x * t, 0.0f, ray.position.z + ray.direction.z * t};
+    const float t = (height - ray.position.y) / ray.direction.y;
+    return {ray.position.x + ray.direction.x * t, height, ray.position.z + ray.direction.z * t};
 }
 
 Game::Controls Game::readControls() const
 {
     Controls c;
     c.move = readMoveKeys();
-    c.aim = mouseGroundPoint();
+    c.aim = mouseAimPoint();
     c.sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     c.fireHeld = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     c.firePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
@@ -605,7 +622,7 @@ void Game::updatePlaying(float dt)
         hurtPlayer(damage, from);
     }
 
-    const Vector3 toAim = Vector3Subtract(c.aim, player_->position());
+    const Vector3 toAim = {c.aim.x - player_->position().x, 0.0f, c.aim.z - player_->position().z};
     const float aimDistance = Vector3Length(toAim);
     const Vector3 lookAhead = aimDistance > 0.01f
         ? Vector3Scale(toAim, std::min(kMaxLookAhead, aimDistance * kLookAhead) / aimDistance)
