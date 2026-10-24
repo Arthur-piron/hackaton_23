@@ -65,6 +65,8 @@ public:
     // Tire jusqu'à count cartes distinctes selon leur rareté, parmi celles encore disponibles.
     std::vector<CardId> drawChoices(int count) const;
     void take(CardId id);
+    // Talent Chance : points de pourcentage ajoutés aux tirages rare et légendaire.
+    void setRarityBonus(int percent) { rarityBonus_ = percent; }
 
     int rank(CardId id) const { return ranks_[static_cast<size_t>(id)]; }
     bool has(CardId id) const { return rank(id) > 0; }
@@ -79,4 +81,5 @@ private:
     std::array<int, static_cast<size_t>(CardId::Count)> ranks_{};
     std::vector<CardId> owned_;
     CardModifiers modifiers_;
+    int rarityBonus_ = 0;
 };
