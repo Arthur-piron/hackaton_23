@@ -35,6 +35,8 @@ enum class EventType {
     MysteryBoxReady,    // l'arme tirée flotte au-dessus de la boîte ; value = 1 si légendaire
     MysteryBoxMoved,    // la boîte s'envole (position de départ) vers un autre emplacement
     AltarUsed,          // prière à l'autel de la chapelle : soins complets
+    CrateLanded,        // une caisse touche le sol
+    CrateBroken,        // value = CrateKind
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

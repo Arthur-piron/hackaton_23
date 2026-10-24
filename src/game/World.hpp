@@ -42,6 +42,8 @@ public:
     // Obstacles ajoutés par d'autres systèmes (grilles...), activables à la volée.
     int addBlocker(BoundingBox box);
     void setBlockerActive(int id, bool active);
+    // Déplace un obstacle (caisses qui apparaissent ailleurs).
+    void moveBlocker(int id, BoundingBox box);
 
 private:
     struct Placed {

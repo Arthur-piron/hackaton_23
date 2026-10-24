@@ -206,6 +206,17 @@ bool Zones::tryOpenNearest(Vector3 player, Economy& economy, EventQueue& events)
     return true;
 }
 
+std::vector<Rectangle> Zones::openAreas() const
+{
+    std::vector<Rectangle> areas;
+    for (const Zone& zone : zones_) {
+        if (!zone.open) continue;
+        const ZoneDef& d = zone.def;
+        areas.push_back({d.min.x, d.min.y, d.max.x - d.min.x, d.max.y - d.min.y});
+    }
+    return areas;
+}
+
 std::vector<Vector3> Zones::openSpawnPoints() const
 {
     std::vector<Vector3> points;
