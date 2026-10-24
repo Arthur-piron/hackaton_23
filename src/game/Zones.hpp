@@ -4,6 +4,7 @@
 #include "game/MapFile.hpp"
 #include "raylib.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

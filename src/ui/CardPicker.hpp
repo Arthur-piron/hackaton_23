@@ -3,6 +3,7 @@
 #include "game/Cards.hpp"
 #include "raylib.h"
 
+#include <cstddef>
 #include <vector>
 
 // Écran de choix de carte à la montée de niveau : fond assombri, cartes qui

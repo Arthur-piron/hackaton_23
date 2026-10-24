@@ -3,6 +3,7 @@
 #include "raylib.h"
 
 #include <array>
+#include <cstddef>
 #include <vector>
 
 // Particules texturées (flashs de tir, sang, étincelles, fumée, poussière) et
