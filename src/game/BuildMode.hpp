@@ -52,7 +52,7 @@ private:
     Vector3 snap(Vector3 cursor) const;
     // Vide si la pose est permise, sinon la raison du refus.
     std::string checkPlacement(Vector3 center, const Surroundings& around, const Economy& economy) const;
-    void place(Structures& structures, Economy& economy, EventQueue& events);
+    void place(Vector3 player, Structures& structures, Economy& economy, EventQueue& events);
     void sell(Structures& structures, Economy& economy, EventQueue& events);
     void undo(Structures& structures, Economy& economy, EventQueue& events);
 

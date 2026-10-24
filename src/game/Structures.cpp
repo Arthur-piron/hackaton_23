@@ -27,6 +27,10 @@ const StructureInfo kCatalog[] = {
      WHITE, 0, false},
     {"Lampadaire", BuildCategory::Utilities, 1, 1, 2, 3, 100, 150.0f, kBlocksPlayer | kBlocksEnemies,
      "graveyard/lightpost-single.glb", WHITE, 0, true},
+    {"Lance-flammes", BuildCategory::Turrets, 1, 1, 2, 10, 400, 280.0f, kBlocksAll, "tower/tower-round-bottom-a.glb",
+     WHITE, 0, true},
+    {"Projecteur", BuildCategory::Utilities, 1, 1, 3, 4, 120, 150.0f, kBlocksPlayer | kBlocksEnemies,
+     "urban/detail-light-double.glb", WHITE, 0, true},
 };
 static_assert(sizeof(kCatalog) / sizeof(kCatalog[0]) == static_cast<size_t>(StructureKind::Count),
               "une entrée de catalogue par structure");

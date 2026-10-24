@@ -20,6 +20,13 @@ struct TurretStats {
 };
 constexpr TurretStats kCrossbow = {12.0f, 1.2f, 45.0f, 2, 0.0f, {235, 210, 160, 255}};
 constexpr TurretStats kMachineGun = {10.0f, 0.125f, 9.0f, 0, 4.0f, {255, 220, 120, 255}};
+// Lance-flammes : cône de 5 m × 40°, 30 dégâts/s et embrasement, tant qu'un mort est dedans.
+constexpr float kFlameRange = 5.0f;
+constexpr float kFlameHalfAngle = 20.0f * DEG2RAD;
+constexpr float kFlameDamage = 30.0f;
+constexpr Color kFlameTint = {255, 150, 70, 255};
+constexpr Color kFlameOuter = {255, 110, 30, 90};
+constexpr Color kFlameInner = {255, 200, 90, 140};
 
 constexpr float kHeadSize = 0.9f;      // la tête tient dans 0,9 m
 constexpr float kTurnSpeed = 8.0f;
@@ -61,21 +68,24 @@ Turrets::Turrets(World& world)
     };
     crossbow_ = make("tower/tower-square-bottom-a.glb", "tower/weapon-ballista.glb");
     machineGun_ = make("tower/tower-square-bottom-b.glb", "tower/weapon-turret.glb");
+    flameThrower_ = make("tower/tower-round-bottom-a.glb", "tower/weapon-cannon.glb");
 }
 
 bool Turrets::isTurret(StructureKind kind)
 {
-    return kind == StructureKind::Crossbow || kind == StructureKind::MachineGun;
+    return kind == StructureKind::Crossbow || kind == StructureKind::MachineGun || kind == StructureKind::FlameThrower;
 }
 
 const Turrets::Look& Turrets::look(StructureKind kind) const
 {
+    if (kind == StructureKind::FlameThrower) return flameThrower_;
     return kind == StructureKind::MachineGun ? machineGun_ : crossbow_;
 }
 
 std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std::vector<Enemy>& enemies,
                                           const World& world, const Generator& generator, EventQueue& events)
 {
+    time_ += dt;
     for (Bolt& b : bolts_) b.age += dt;
     bolts_.erase(std::remove_if(bolts_.begin(), bolts_.end(), [](const Bolt& b) { return b.age >= kBoltLife; }),
                  bolts_.end());
@@ -87,6 +97,7 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
         const TurretStats& stats = statsOf(kind);
         TurretState& turret = structures.turret(id);
         turret.cooldown = std::max(0.0f, turret.cooldown - dt);
+        turret.firing = false;
         const Vector3 base = structures.center(id);
         // Sans courant, une tourelle électrique ne fait rien.
         if (Structures::info(kind).electric && !generator.powered(structures, base)) continue;
@@ -94,7 +105,8 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
 
         // Le mort le plus proche, à portée et en vue.
         Enemy* target = nullptr;
-        float best = stats.range;
+        const bool flame = kind == StructureKind::FlameThrower;
+        float best = flame ? kFlameRange : stats.range;
         for (Enemy& e : enemies) {
             if (!e.isAlive()) continue;
             const float d = Vector2Distance({e.position().x, e.position().z}, {base.x, base.z});
@@ -108,6 +120,23 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
         const Vector3 aim = target->hitCenter();
         const float wanted = std::atan2(aim.x - base.x, aim.z - base.z);
         turret.yaw += angleDelta(turret.yaw, wanted) * std::min(1.0f, kTurnSpeed * dt);
+        if (flame) {
+            // Tant qu'il est aligné, il crache du feu sur tous les morts du cône.
+            if (std::fabs(angleDelta(turret.yaw, wanted)) > kAimTolerance) continue;
+            turret.firing = true;
+            const Vector3 direction = {std::sin(turret.yaw), 0.0f, std::cos(turret.yaw)};
+            for (Enemy& e : enemies) {
+                if (!e.isAlive()) continue;
+                const Vector3 to = {e.position().x - base.x, 0.0f, e.position().z - base.z};
+                const float d = Vector3Length(to);
+                if (d > kFlameRange + e.radius() || d < 0.01f) continue;
+                if (std::acos(std::clamp(Vector3DotProduct(to, direction) / d, -1.0f, 1.0f)) > kFlameHalfAngle) continue;
+                Vector3 blocked;
+                if (world.segmentBlocked(muzzle, e.hitCenter(), blocked)) continue;
+                hits.push_back({&e, kFlameDamage * dt, direction, true});
+            }
+            continue;
+        }
         if (turret.cooldown > 0.0f || std::fabs(angleDelta(turret.yaw, wanted)) > kAimTolerance) continue;
         turret.cooldown = stats.interval;
 
@@ -150,7 +179,22 @@ void Turrets::draw(const Structures& structures) const
         const float yaw = structures.turret(id).yaw;
         const Vector3 at = World::centeredPosition(*l.head, {base.x, l.baseTop, base.z}, yaw * RAD2DEG,
                                                    Vector3Scale({1.0f, 1.0f, 1.0f}, l.headScale / kKenneyScale));
-        DrawModelEx(*l.head, at, {0.0f, 1.0f, 0.0f}, yaw * RAD2DEG, {l.headScale, l.headScale, l.headScale}, WHITE);
+        const bool flame = kind == StructureKind::FlameThrower;
+        DrawModelEx(*l.head, at, {0.0f, 1.0f, 0.0f}, yaw * RAD2DEG, {l.headScale, l.headScale, l.headScale},
+                    flame ? kFlameTint : WHITE);
+        if (flame && structures.turret(id).firing) {
+            // Le jet : deux cônes additifs qui ondulent.
+            const Vector3 direction = {std::sin(yaw), 0.0f, std::cos(yaw)};
+            const Vector3 from = {base.x + direction.x * 0.4f, l.baseTop + kMuzzleHeight, base.z + direction.z * 0.4f};
+            const float flicker = 0.85f + 0.15f * std::sin(time_ * 31.0f + base.x);
+            const float reach = kFlameRange * flicker;
+            const Vector3 to = Vector3Add(from, Vector3Scale(direction, reach));
+            BeginBlendMode(BLEND_ADDITIVE);
+            DrawCylinderEx(from, to, 0.1f, reach * std::tan(kFlameHalfAngle), 14, kFlameOuter);
+            DrawCylinderEx(from, Vector3Lerp(from, to, 0.7f), 0.05f, reach * 0.5f * std::tan(kFlameHalfAngle), 10,
+                           kFlameInner);
+            EndBlendMode();
+        }
     }
     for (const Bolt& b : bolts_) {
         // Le carreau : un trait qui file et s'estompe.

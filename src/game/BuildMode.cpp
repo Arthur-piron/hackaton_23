@@ -157,12 +157,14 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
     if (refusal_.empty() && category_ == BuildCategory::Traps && structures.countIn(BuildCategory::Traps) >= Traps::kMaxTraps) {
         refusal_ = TextFormat("Au plus %d pièges", Traps::kMaxTraps);
     }
-    // Limites de GAME.md §7.2 : un générateur, huit lampadaires.
+    // Limites de GAME.md §7.2 : un générateur, huit lampadaires et projecteurs.
     if (refusal_.empty() && selected_ == StructureKind::Generator && structures.countOf(StructureKind::Generator) >= 1) {
         refusal_ = "Un seul générateur";
     }
-    if (refusal_.empty() && selected_ == StructureKind::Lamppost && structures.countOf(StructureKind::Lamppost) >= kMaxLamps) {
-        refusal_ = TextFormat("Au plus %d lampadaires", kMaxLamps);
+    const bool light = selected_ == StructureKind::Lamppost || selected_ == StructureKind::Projector;
+    const int lights = structures.countOf(StructureKind::Lamppost) + structures.countOf(StructureKind::Projector);
+    if (refusal_.empty() && light && lights >= kMaxLamps) {
+        refusal_ = TextFormat("Au plus %d lampadaires et projecteurs", kMaxLamps);
     }
     const int turretLimit = Turrets::limit(static_cast<int>(around.zones.openAreas().size()));
     if (refusal_.empty() && category_ == BuildCategory::Turrets && structures.countIn(BuildCategory::Turrets) >= turretLimit) {
@@ -176,24 +178,26 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         dragging_ = true;
         if (refusal_.empty()) {
-            place(structures, economy, events);
+            place(around.player, structures, economy, events);
         } else {
             events.push_back({EventType::BuildDenied, ghost_});
         }
     } else if (dragging_ && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-        if (refusal_.empty() && Vector3Distance(ghost_, lastPlaced_) > 0.5f) place(structures, economy, events);
+        if (refusal_.empty() && Vector3Distance(ghost_, lastPlaced_) > 0.5f) place(around.player, structures, economy, events);
     } else {
         dragging_ = false;
     }
 }
 
-void BuildMode::place(Structures& structures, Economy& economy, EventQueue& events)
+void BuildMode::place(Vector3 player, Structures& structures, Economy& economy, EventQueue& events)
 {
     const StructureInfo& s = Structures::info(selected_);
     economy.spendResource(Resource::Wood, s.wood);
     economy.spendResource(Resource::Scrap, s.scrap);
     economy.spend(s.gold);
     const int id = structures.place(selected_, ghost_, rotated_);
+    // Le projecteur éclaire dans l'axe joueur → emplacement : on le pose face aux morts.
+    if (selected_ == StructureKind::Projector) structures.turret(id).yaw = std::atan2(ghost_.x - player.x, ghost_.z - player.z);
     placedThisPause_.push_back({id, selected_});
     lastPlaced_ = ghost_;
     refusal_ = "Place occupée";

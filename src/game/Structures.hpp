@@ -13,7 +13,8 @@ class World;
 enum class BuildCategory { Defenses, Turrets, Traps, Utilities, Count };
 
 enum class StructureKind {
-    Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, MachineGun, Generator, Lamppost, Count
+    Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, MachineGun, Generator, Lamppost,
+    FlameThrower, Projector, Count
 };
 
 // Description d'une structure du catalogue (GAME.md §7.3).
@@ -46,6 +47,7 @@ struct TurretState {
     float cooldown = 0.0f;
     float yaw = 0.0f; // orientation de l'arme, en radians
     float fuel = 0.0f; // générateur : bidons dans le réservoir
+    bool firing = false; // lance-flammes : crache du feu pendant cette image
 };
 
 // Les structures posées par le joueur : collision dans World, rendu (fissurée, en ruine),

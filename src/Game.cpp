@@ -256,6 +256,9 @@ Game::Game(const Options& options)
         structures_->turret(generator).fuel = 1.0f;
         structures_->place(StructureKind::MachineGun, Vector3Add(me, {-4.5f, 0.0f, 1.5f}), false);
         structures_->place(StructureKind::Lamppost, Vector3Add(me, {-2.5f, 0.0f, -1.5f}), false);
+        structures_->place(StructureKind::FlameThrower, Vector3Add(me, {1.5f, 0.0f, -1.5f}), false);
+        const int projector = structures_->place(StructureKind::Projector, Vector3Add(me, {-1.5f, 0.0f, 0.5f}), false);
+        structures_->turret(projector).yaw = PI; // vers la horde, au nord
         structures_->place(StructureKind::Spikes, Vector3Add(me, {-1.5f, 0.0f, -2.5f}), false);
         structures_->place(StructureKind::Mine, Vector3Add(me, {0.5f, 0.0f, -3.5f}), false);
         structures_->place(StructureKind::BearTrap, Vector3Add(me, {1.5f, 0.0f, -2.5f}), false);
@@ -931,10 +934,17 @@ bool Game::updateBase(float dt, const Controls& c)
     for (const Traps::Blast& blast : trapped.blasts) {
         explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor);
     }
-    generator_.update(dt, waves_->phase() == WaveManager::Phase::Fighting, *structures_, waves_->enemies(), events_);
+    for (const Generator::Burn& burn :
+         generator_.update(dt, waves_->phase() == WaveManager::Phase::Fighting, *structures_, waves_->enemies(),
+                           events_)) {
+        damageEnemy(*burn.enemy, burn.damage, {0.0f, 0.0f, 0.0f}, 0.0f, HitKind::Light, true);
+    }
     for (const Turrets::Hit& hit :
          turrets_->update(dt, *structures_, waves_->enemies(), *world_, generator_, events_)) {
-        damageEnemy(*hit.enemy, hit.damage, hit.direction, kTurretKnockback, HitKind::Normal, true);
+        // Le lance-flammes embrase et ne repousse pas.
+        if (hit.ignite && hit.enemy->isAlive()) cardEffects_.ignite(*hit.enemy);
+        damageEnemy(*hit.enemy, hit.damage, hit.direction, hit.ignite ? 0.0f : kTurretKnockback,
+                    hit.ignite ? HitKind::Burn : HitKind::Normal, true);
     }
     if (player_->isDead()) {
         buildMode_.reset();
