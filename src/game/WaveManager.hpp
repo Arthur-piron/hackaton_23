@@ -6,6 +6,7 @@
 #include "game/Events.hpp"
 
 #include <array>
+#include <cstddef>
 #include <memory>
 #include <utility>
 #include <vector>

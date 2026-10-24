@@ -2,6 +2,43 @@
 
 Survie zombie en 3D vue de dessus, C++17 / raylib 5.5, pour Linux et Windows. Design du jeu : `docs/GAME.md`.
 
+> Panne générale, la nuit, dans un vieux cimetière. Tu es le gardien, dernier vivant. **Les morts craignent la lumière** : ta lampe les ralentit et les brûle, mais sa batterie se vide. Tiens jusqu'à l'aube : ramasse l'or des morts, ouvre les grilles du cimetière, choisis tes cartes… et ne te fais pas encercler.
+
+## Jouer
+
+Télécharger la dernière version dans **Releases** : `LastLight-windows.zip` ou `LastLight-linux.tar.gz`. Décompresser, puis lancer `lastlight.exe` (Windows) ou `./lastlight` (Linux). Le dossier `assets/` doit rester à côté de l'exécutable.
+
+| Entrée | Action |
+|---|---|
+| ZQSD / WASD | Se déplacer |
+| Maj | Sprint (endurance) |
+| Souris | Viser |
+| Clic gauche | Tirer |
+| Clic droit | Lampe torche (vide la batterie) |
+| 1-4 / molette | Changer d'arme |
+| R | Recharger |
+| E | Interagir (grille, marchand) |
+| Entrée | Entre deux vagues : lancer la suivante tout de suite |
+| Échap | Pause |
+
+La progression (ossements, talents, records) est enregistrée dans `lastlight_save.txt`, à côté de l'exécutable ou à défaut dans le dossier utilisateur.
+
+## Publier une version
+
+Pousser un tag `v*` sur `main` : le workflow `.github/workflows/release.yml` compile Linux et Windows et publie la release avec les deux archives.
+
+```
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+## Docker (Linux)
+
+```
+docker build --target export --output dist .   # exécutable Linux + assets dans dist/
+docker build -t lastlight .                     # image jouable (X11 de l'hôte, voir l'en-tête du Dockerfile)
+```
+
 ## Compiler et lancer
 
 ```
@@ -20,10 +57,10 @@ Projet d'équipe à 3. Chaque membre travaille avec son propre Claude (Claude Co
 
 ## Règles de travail
 
-1. **Personne ne pousse sur `main`.** `main` est protégée : PR obligatoire et approbation du leader requise.
+1. **Personne ne pousse sur `main`.** `main` est protégée : PR obligatoire et approbation d'un code owner (`.github/CODEOWNERS`) requise.
 2. **Une tâche = une branche `feature/<nom>` = une PR.**
 3. **Chaque PR met à jour `docs/COMMUNICATION.md`** : statut de la tâche et une ligne dans le journal.
-4. **Seul le leader fusionne.** Aucun membre, et aucun Claude, ne fusionne sa propre PR.
+4. **On ne fusionne jamais sa propre PR.** Un autre membre (ou son Claude) la relit, l'approuve et la fusionne.
 5. Les questions qui bloquent vont dans `docs/COMMUNICATION.md` (section « Questions ouvertes ») ou dans une issue GitHub.
 
 ## Communication entre les Claude

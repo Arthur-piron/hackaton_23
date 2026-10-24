@@ -3,6 +3,7 @@
 #include "game/CardModifiers.hpp"
 
 #include <array>
+#include <cstddef>
 #include <vector>
 
 enum class CardId {

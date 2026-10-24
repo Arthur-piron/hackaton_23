@@ -1,0 +1,104 @@
+name: Release
+
+# Pousser un tag v* (ex. git tag v1.0.0 && git push origin v1.0.0) publie une release GitHub
+# avec LastLight-linux.tar.gz et LastLight-windows.zip. Sur une PR qui touche l'empaquetage
+# (ou en lancement manuel), tout est construit mais rien n'est publié : les archives restent
+# des artefacts du workflow.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths: [Dockerfile, .dockerignore, .github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux (gcc)
+    runs-on: ubuntu-22.04 # glibc plus ancienne : l'exécutable tourne aussi sur des distributions moins récentes
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances raylib
+        run: |
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y --no-install-recommends \
+            build-essential cmake \
+            libasound2-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev \
+            libxinerama-dev libgl1-mesa-dev libglu1-mesa-dev \
+            libwayland-dev libxkbcommon-dev
+
+      - name: Compilation
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+
+      - name: Archive
+        run: |
+          mkdir -p LastLight
+          cp build/lastlight README.md CREDITS.md LastLight/
+          cp -r build/assets LastLight/assets
+          tar -czf LastLight-linux.tar.gz LastLight
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastLight-linux
+          path: LastLight-linux.tar.gz
+
+  windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilation
+        run: |
+          cmake -S . -B build
+          cmake --build build --config Release --parallel
+
+      - name: Archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path LastLight | Out-Null
+          Copy-Item build/Release/lastlight.exe, README.md, CREDITS.md LastLight/
+          Copy-Item -Recurse build/Release/assets LastLight/assets
+          Compress-Archive -Path LastLight -DestinationPath LastLight-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastLight-windows
+          path: LastLight-windows.zip
+
+  docker:
+    name: Docker (export Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image et export
+        run: |
+          docker build --target export --output dist .
+          docker build -t lastlight .
+          test -x dist/lastlight && test -d dist/assets
+
+  publish:
+    name: Publication
+    needs: [linux, windows, docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Release GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" LastLight-linux.tar.gz LastLight-windows.zip \
+            --repo "$GITHUB_REPOSITORY" --title "LAST LIGHT $GITHUB_REF_NAME" --generate-notes
