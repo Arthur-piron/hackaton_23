@@ -23,6 +23,8 @@ public:
     // Prendre un coup divise le combo par deux.
     void onPlayerDamaged();
 
+    // Bonus d'or des cartes, appliqué à l'or lâché par les morts.
+    void setGoldMultiplier(float multiplier) { goldMultiplier_ = multiplier; }
     void addGold(int amount);
     // Publie un événement LevelUp par niveau gagné.
     void addXp(int amount, EventQueue& events);
@@ -52,4 +54,5 @@ private:
     int pendingLevelUps_ = 0;
     int combo_ = 0;
     float comboTimer_ = 0.0f;
+    float goldMultiplier_ = 1.0f;
 };

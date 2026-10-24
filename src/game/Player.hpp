@@ -11,6 +11,7 @@ class World;
 class Player {
 public:
     static constexpr float kRadius = 0.4f;
+    static constexpr float kBaseHealth = 100.0f;
 
     explicit Player(const AnimatedModel& model);
 
@@ -20,6 +21,14 @@ public:
     // Renvoie vrai si ce coup tue le joueur.
     bool takeDamage(float amount, Vector3 from, EventQueue& events);
     void heal(float amount);
+    // Bonus des cartes.
+    void setSpeedMultiplier(float multiplier) { speedMultiplier_ = multiplier; }
+    void setStaminaMultipliers(float capacity, float regen)
+    {
+        staminaCapacity_ = capacity;
+        staminaRegen_ = regen;
+    }
+    void setMaxHealthBonus(float bonus);
     void applyRecoil(Vector3 impulse);
     void notifyShot();
     // weapon : modèle de l'arme tenue (peut être nul).
@@ -34,6 +43,8 @@ public:
     float maxHealth() const { return maxHealth_; }
     float stamina() const { return stamina_; }
     bool isDead() const { return dead_; }
+    // Vrai juste après un coup : les dégâts suivants sont ignorés.
+    bool isInvulnerable() const { return invulnerable_ > 0.0f; }
     // Vrai quand l'animation de mort est terminée.
     bool deathFinished() const;
     // 1 juste après un coup, puis décroît vers 0 (flash rouge de l'écran).
@@ -63,8 +74,12 @@ private:
     float stamina_ = 1.0f;
     bool exhausted_ = false;
 
-    float maxHealth_ = 100.0f;
-    float health_ = 100.0f;
+    float speedMultiplier_ = 1.0f;
+    float staminaCapacity_ = 1.0f;
+    float staminaRegen_ = 1.0f;
+
+    float maxHealth_ = kBaseHealth;
+    float health_ = kBaseHealth;
     float invulnerable_ = 0.0f;
     float hurtFlash_ = 0.0f;
     float shootPose_ = 0.0f;

@@ -14,6 +14,10 @@ public:
     void clear() { items_.clear(); }
     // Fait jaillir l'or (en plusieurs pièces) et l'XP d'une mort.
     void spawnLoot(Vector3 position, int gold, int xp);
+    // Fait pleuvoir des pièces du ciel autour d'un point (carte Fortune du mort).
+    void spawnCoinRain(Vector3 center, int coins, int goldPerCoin);
+    // Bonus des cartes sur le rayon d'aimantation.
+    void setMagnetMultiplier(float multiplier) { magnetMultiplier_ = multiplier; }
     // Aimante, ramasse (crédite l'économie) et fait vieillir les objets.
     void update(float dt, Vector3 playerPosition, Economy& economy, EventQueue& events);
     void draw() const;
@@ -35,4 +39,5 @@ private:
     void spawn(Kind kind, int value, Vector3 position);
 
     std::vector<Item> items_;
+    float magnetMultiplier_ = 1.0f;
 };

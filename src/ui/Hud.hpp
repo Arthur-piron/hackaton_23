@@ -5,6 +5,15 @@
 #include <string>
 #include <vector>
 
+// Pastille d'une carte possédée.
+struct HudCard {
+    std::string label;  // 3 lettres
+    Color color;        // famille
+    Color border;       // rareté
+    int rank;
+    int maxRank;
+};
+
 // Ce que le HUD affiche, rempli par Game à chaque image.
 struct HudData {
     float health = 0.0f;
@@ -30,6 +39,7 @@ struct HudData {
     int combo = 0;
     int comboMultiplier = 1;
     float comboTimeLeft = 0.0f; // fraction 0..1 de la fenêtre du combo
+    std::vector<HudCard> cards;
 };
 
 // Interface en jeu : barres, munitions, vague, messages, chiffres de dégâts.
@@ -40,7 +50,8 @@ public:
 
     // Grand message central (« VAGUE 3 », « VAGUE TERMINÉE »...).
     void announce(const std::string& title, const std::string& subtitle, Color color);
-    void addDamageNumber(Vector3 position, float value, Color color);
+    // scale : taille relative du chiffre (coups critiques en grand, brûlures en petit).
+    void addDamageNumber(Vector3 position, float value, Color color, float scale = 1.0f);
     // Petits sursauts visuels du compteur d'or et du combo.
     void pulseGold() { goldPulse_ = 1.0f; }
     void pulseCombo() { comboPulse_ = 1.0f; }
@@ -52,6 +63,7 @@ private:
         std::string text;
         Color color;
         float age;
+        float scale;
     };
 
     void drawBars(const HudData& data) const;
@@ -60,6 +72,7 @@ private:
     void drawAnnouncement() const;
     void drawEconomy(const HudData& data) const;
     void drawCombo(const HudData& data) const;
+    void drawCards(const HudData& data) const;
     void drawCrosshair() const;
 
     std::vector<FloatingText> numbers_;

@@ -5,6 +5,8 @@
 #include "fx/Particles.hpp"
 #include "fx/PostFx.hpp"
 #include "game/CameraRig.hpp"
+#include "game/CardEffects.hpp"
+#include "game/Cards.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
 #include "game/Pickups.hpp"
@@ -14,6 +16,7 @@
 #include "game/Weapon.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
+#include "ui/CardPicker.hpp"
 #include "ui/Hud.hpp"
 
 #include <memory>
@@ -24,7 +27,7 @@
 // les événements de gameplay (son, caméra, HUD).
 class Game {
 public:
-    enum class State { Menu, Playing, Paused, GameOver, Victory };
+    enum class State { Menu, Playing, Paused, LevelUp, GameOver, Victory };
 
     struct Options {
         int smokeFrames = 0;         // > 0 : mode test automatique
@@ -59,9 +62,25 @@ private:
     // Pilote automatique du mode --smoke : vise l'ennemi le plus proche et tire.
     Controls autopilot() const;
     void resolveProjectiles();
-    // Fait progresser le combo et lâche l'or et l'XP d'un ennemi qui vient de mourir.
+    // Point d'entrée unique des dégâts infligés aux ennemis (balles, feu, explosions) :
+    // une mort passe toujours par rewardKill. Renvoie vrai si l'ennemi meurt.
+    bool damageEnemy(Enemy& enemy, float damage, Vector3 direction, float knockback, HitKind kind = HitKind::Normal);
+    // Fait progresser le combo, lâche l'or et l'XP d'un ennemi qui vient de mourir
+    // et déclenche les cartes liées aux morts (crochet onKill).
     void rewardKill(const Enemy& enemy);
-    // Balles arrêtées par les murs d'enceinte (étincelles).
+    // Dégâts reçus par le joueur (crochet onDamaged : Dernier rempart).
+    void hurtPlayer(float damage, Vector3 from);
+    // Brûlures, explosions nécrotiques en attente, Soleil de poche.
+    void updateCardEffects(float dt);
+    // Enflamme les 3 ennemis les plus proches de source (Chaîne de feu).
+    void spreadFire(const Enemy& source);
+    // Ennemi vivant le plus proche de from, à moins de maxDistance (nul sinon).
+    Enemy* nearestEnemy(Vector3 from, float maxDistance);
+    // Recalcule les bonus des cartes et les transmet aux systèmes.
+    void applyCardModifiers();
+    // Tire 3 cartes et passe à l'écran de choix (reste en jeu si plus aucune carte n'est disponible).
+    void openCardPicker();
+    void updateLevelUp(float dt);
     void handleEvents();
     void updateFootsteps(float dt);
 
@@ -92,12 +111,19 @@ private:
     ProjectileSystem projectiles_;
     Economy economy_;
     Pickups pickups_;
+    Cards cards_;
+    CardEffects cardEffects_;
     CameraRig cameraRig_;
     Hud hud_;
+    CardPicker cardPicker_;
     EventQueue events_;
 
     int score_ = 0;
     int kills_ = 0;
     float hitStop_ = 0.0f;
     float footstepTimer_ = 0.0f;
+    float levelUpSlowMo_ = 0.0f;   // ralenti avant l'écran des cartes
+    float pocketSunTimer_ = 0.0f;
+    bool lastStandReady_ = true;   // Dernier rempart : une fois par vague
+    std::vector<Vector3> pendingExplosions_;
 };

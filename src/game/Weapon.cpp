@@ -12,6 +12,11 @@ float randomSigned()
 {
     return static_cast<float>(GetRandomValue(-1000, 1000)) / 1000.0f;
 }
+
+bool chance(float probability)
+{
+    return static_cast<float>(GetRandomValue(0, 9999)) < probability * 10000.0f;
+}
 }
 
 const std::vector<WeaponStats>& Arsenal::catalog()
@@ -90,7 +95,7 @@ void Arsenal::reset()
 {
     const auto& weapons = catalog();
     slots_.assign(weapons.size(), Slot{});
-    for (size_t i = 0; i < weapons.size(); ++i) slots_[i].magazine = weapons[i].magazine;
+    for (size_t i = 0; i < weapons.size(); ++i) slots_[i].magazine = magazineOf(static_cast<int>(i));
     slots_[0].unlocked = true;
     current_ = 0;
     cooldown_ = 0.0f;
@@ -98,9 +103,15 @@ void Arsenal::reset()
     timeSinceShot_ = 10.0f;
 }
 
+int Arsenal::magazineOf(int weapon) const
+{
+    const float size = static_cast<float>(catalog()[static_cast<size_t>(weapon)].magazine);
+    return std::max(1, static_cast<int>(std::lround(size * modifiers_.magazineMultiplier)));
+}
+
 float Arsenal::reloadProgress() const
 {
-    const float total = stats().reloadTime;
+    const float total = reloadTime();
     return total > 0.0f ? 1.0f - reloadTimer_ / total : 1.0f;
 }
 
@@ -138,9 +149,9 @@ void Arsenal::startReload(EventQueue& events, Vector3 position)
 {
     const WeaponStats& weapon = stats();
     const Slot& slot = slots_[current_];
-    if (reloadTimer_ > 0.0f || slot.magazine >= weapon.magazine) return;
+    if (reloadTimer_ > 0.0f || slot.magazine >= magazineSize()) return;
     if (!weapon.infiniteReserve && slot.reserve <= 0) return;
-    reloadTimer_ = weapon.reloadTime;
+    reloadTimer_ = reloadTime();
     events.push_back({EventType::ReloadStart, position});
 }
 
@@ -156,7 +167,7 @@ bool Arsenal::update(float dt, bool fireHeld, bool firePressed, bool reloadPress
         reloadTimer_ -= dt;
         if (reloadTimer_ <= 0.0f) {
             reloadTimer_ = 0.0f;
-            const int needed = weapon.magazine - slot.magazine;
+            const int needed = magazineSize() - slot.magazine;
             const int taken = weapon.infiniteReserve ? needed : std::min(needed, slot.reserve);
             slot.magazine += taken;
             if (!weapon.infiniteReserve) slot.reserve -= taken;
@@ -177,22 +188,27 @@ bool Arsenal::update(float dt, bool fireHeld, bool firePressed, bool reloadPress
         return false;
     }
 
-    slot.magazine -= 1;
-    cooldown_ = weapon.fireInterval;
+    // Chargeur sans fond : certains tirs ne consomment pas de balle.
+    if (!chance(modifiers_.noAmmoChance)) slot.magazine -= 1;
+    cooldown_ = weapon.fireInterval / modifiers_.fireRateMultiplier;
     timeSinceShot_ = 0.0f;
     const float baseYaw = std::atan2(forward.x, forward.z);
-    for (int i = 0; i < weapon.pellets; ++i) {
-        const float spread = weapon.spreadDegrees * DEG2RAD * randomSigned();
+    const int pellets = weapon.pellets * (modifiers_.doubleShot ? 2 : 1);
+    const float spreadDegrees = weapon.spreadDegrees + modifiers_.extraSpreadDegrees;
+    for (int i = 0; i < pellets; ++i) {
+        const float spread = spreadDegrees * DEG2RAD * randomSigned();
         const float yaw = baseYaw + spread;
-        const float speed = weapon.projectileSpeed * (weapon.pellets > 1 ? 0.9f + 0.2f * std::fabs(randomSigned()) : 1.0f);
+        const float speed = weapon.projectileSpeed * (pellets > 1 ? 0.9f + 0.2f * std::fabs(randomSigned()) : 1.0f);
         Projectile p;
         p.position = muzzle;
         p.previous = muzzle;
         p.velocity = {std::sin(yaw) * speed, 0.0f, std::cos(yaw) * speed};
-        p.damage = weapon.damage;
+        p.damage = weapon.damage * modifiers_.damageMultiplier;
         p.knockback = weapon.knockback;
         p.life = kProjectileLife;
-        p.pierce = weapon.pierce;
+        p.pierce = weapon.pierce + modifiers_.pierceBonus;
+        p.ricochets = modifiers_.ricochets;
+        p.incendiary = modifiers_.incendiary;
         projectiles.spawn(p);
     }
     events.push_back({EventType::Shot, muzzle, static_cast<float>(current_), forward});

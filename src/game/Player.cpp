@@ -107,14 +107,14 @@ void Player::update(float dt, const World& world, Vector3 aimPoint, Vector3 move
     const bool moving = Vector3Length(move) > 0.0f;
     sprinting_ = sprint && moving && !exhausted_;
     if (sprinting_) {
-        stamina_ = std::max(0.0f, stamina_ - kStaminaDrain * dt);
+        stamina_ = std::max(0.0f, stamina_ - kStaminaDrain / staminaCapacity_ * dt);
         if (stamina_ <= 0.0f) exhausted_ = true;
     } else {
-        stamina_ = std::min(1.0f, stamina_ + kStaminaRegen * dt);
+        stamina_ = std::min(1.0f, stamina_ + kStaminaRegen * staminaRegen_ * dt);
         if (exhausted_ && stamina_ >= kStaminaRecovered) exhausted_ = false;
     }
 
-    const Vector3 target = Vector3Scale(move, sprinting_ ? kSprintSpeed : kWalkSpeed);
+    const Vector3 target = Vector3Scale(move, (sprinting_ ? kSprintSpeed : kWalkSpeed) * speedMultiplier_);
     velocity_ = Vector3Lerp(velocity_, target, 1.0f - std::exp(-kAcceleration * dt));
     recoil_ = Vector3Scale(recoil_, std::exp(-kRecoilDamping * dt));
     const Vector3 step = Vector3Scale(Vector3Add(velocity_, recoil_), dt);
@@ -168,6 +168,14 @@ bool Player::takeDamage(float amount, Vector3 from, EventQueue& events)
 void Player::heal(float amount)
 {
     if (!dead_) health_ = std::min(maxHealth_, health_ + amount);
+}
+
+void Player::setMaxHealthBonus(float bonus)
+{
+    const float previous = maxHealth_;
+    maxHealth_ = kBaseHealth + bonus;
+    // La vie max gagnée est aussi soignée.
+    if (!dead_) health_ = std::clamp(health_ + std::max(0.0f, maxHealth_ - previous), 0.0f, maxHealth_);
 }
 
 void Player::applyRecoil(Vector3 impulse)

@@ -42,6 +42,7 @@ public:
     // Centre de la zone touchable (torse).
     Vector3 hitCenter() const;
     float radius() const;
+    float health() const { return health_; }
     EnemyType type() const { return type_; }
     const EnemyStats& stats() const { return enemyStats(type_); }
     // Identifiant unique (stable même si le tableau des ennemis est réorganisé).

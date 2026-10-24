@@ -15,6 +15,9 @@ struct Projectile {
     float knockback = 0.0f;
     float life = 0.0f;
     int pierce = 0; // nombre d'ennemis supplémentaires traversés
+    int ricochets = 0;      // rebonds restants quand la balle tue (carte Ricochet)
+    bool incendiary = false;
+    bool rebound = false;   // balle issue d'un rebond
     unsigned lastHit = 0; // id du dernier ennemi touché (0 : aucun)
     bool alive = true;
 };
