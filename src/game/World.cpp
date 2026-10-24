@@ -327,6 +327,15 @@ bool World::segmentBlocked(Vector3 a, Vector3 b, Vector3& hit, unsigned mask) co
     return true;
 }
 
+std::vector<BoundingBox> World::blockerBoxes(unsigned mask) const
+{
+    std::vector<BoundingBox> boxes;
+    for (const Blocker& blocker : blockers_) {
+        if (blocker.active && (blocker.mask & mask) != 0) boxes.push_back(blocker.box);
+    }
+    return boxes;
+}
+
 bool World::areaBlocked(BoundingBox area) const
 {
     for (const Blocker& blocker : blockers_) {

@@ -206,6 +206,17 @@ bool Zones::tryOpenNearest(Vector3 player, Economy& economy, EventQueue& events)
     return true;
 }
 
+Rectangle Zones::bounds() const
+{
+    Vector2 lo = {1e9f, 1e9f};
+    Vector2 hi = {-1e9f, -1e9f};
+    for (const Zone& zone : zones_) {
+        lo = Vector2Min(lo, zone.def.min);
+        hi = Vector2Max(hi, zone.def.max);
+    }
+    return {lo.x, lo.y, hi.x - lo.x, hi.y - lo.y};
+}
+
 std::vector<Vector3> Zones::gateCenters() const
 {
     std::vector<Vector3> centers;
