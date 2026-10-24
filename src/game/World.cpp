@@ -243,15 +243,25 @@ void World::addWall(const WallDef& wall)
     }
 }
 
-int World::addBlocker(BoundingBox box)
+int World::addBlocker(BoundingBox box, unsigned mask)
 {
-    blockers_.push_back({box, true});
+    blockers_.push_back({box, true, mask});
     return static_cast<int>(blockers_.size()) - 1;
 }
 
 void World::setBlockerActive(int id, bool active)
 {
     blockers_[static_cast<size_t>(id)].active = active;
+}
+
+void World::moveBlocker(int id, BoundingBox box)
+{
+    blockers_[static_cast<size_t>(id)].box = box;
+}
+
+void World::setBlockerMask(int id, unsigned mask)
+{
+    blockers_[static_cast<size_t>(id)].mask = mask;
 }
 
 void World::draw(const Camera3D& camera) const
@@ -267,11 +277,11 @@ void World::draw(const Camera3D& camera) const
     }
 }
 
-Vector3 World::resolveCircle(Vector3 position, float radius) const
+Vector3 World::resolveCircle(Vector3 position, float radius, unsigned mask) const
 {
     for (int pass = 0; pass < kResolvePasses; ++pass) {
         for (const Blocker& blocker : blockers_) {
-            if (!blocker.active) continue;
+            if (!blocker.active || (blocker.mask & mask) == 0) continue;
             const BoundingBox& b = blocker.box;
             if (position.x + radius <= b.min.x || position.x - radius >= b.max.x ||
                 position.z + radius <= b.min.z || position.z - radius >= b.max.z) {
@@ -304,14 +314,34 @@ Vector3 World::resolveCircle(Vector3 position, float radius) const
     return position;
 }
 
-bool World::segmentBlocked(Vector3 a, Vector3 b, Vector3& hit) const
+bool World::segmentBlocked(Vector3 a, Vector3 b, Vector3& hit, unsigned mask) const
 {
     float best = 2.0f;
     for (const Blocker& blocker : blockers_) {
+        if (!blocker.active || (blocker.mask & mask) == 0) continue;
         float t = 0.0f;
-        if (blocker.active && segmentHitsBox(a, b, blocker.box, t) && t < best) best = t;
+        if (segmentHitsBox(a, b, blocker.box, t) && t < best) best = t;
     }
     if (best > 1.0f) return false;
     hit = Vector3Lerp(a, b, best);
     return true;
+}
+
+std::vector<BoundingBox> World::blockerBoxes(unsigned mask) const
+{
+    std::vector<BoundingBox> boxes;
+    for (const Blocker& blocker : blockers_) {
+        if (blocker.active && (blocker.mask & mask) != 0) boxes.push_back(blocker.box);
+    }
+    return boxes;
+}
+
+bool World::areaBlocked(BoundingBox area) const
+{
+    for (const Blocker& blocker : blockers_) {
+        if (!blocker.active) continue;
+        const BoundingBox& b = blocker.box;
+        if (area.max.x > b.min.x && area.min.x < b.max.x && area.max.z > b.min.z && area.min.z < b.max.z) return true;
+    }
+    return false;
 }

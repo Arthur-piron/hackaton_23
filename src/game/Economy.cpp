@@ -50,6 +50,53 @@ void Economy::onPlayerDamaged()
     if (combo_ == 0) comboTimer_ = 0.0f;
 }
 
+Economy::Salvage Economy::rollSalvage(EnemyType type)
+{
+    // Chance et quantité de bois puis de ferraille, dans l'ordre d'EnemyType.
+    struct Drop {
+        float woodChance;
+        int wood;
+        float scrapChance;
+        int scrap;
+    };
+    static constexpr Drop kDrops[] = {
+        {0.25f, 1, 0.0f, 0},  // marcheur
+        {0.0f, 0, 0.15f, 1},  // coureur
+        {0.10f, 1, 0.30f, 1}, // squelette
+        {1.0f, 3, 0.60f, 2},  // brute
+        {0.0f, 0, 0.35f, 1},  // vampire
+        {0.0f, 0, 0.0f, 0},   // spectre
+    };
+    static_assert(sizeof(kDrops) / sizeof(kDrops[0]) == static_cast<size_t>(EnemyType::Count),
+                  "un butin par type d'ennemi");
+    const Drop& drop = kDrops[static_cast<size_t>(type)];
+    Salvage salvage;
+    if (static_cast<float>(GetRandomValue(0, 9999)) < drop.woodChance * 10000.0f) salvage.wood = drop.wood;
+    if (static_cast<float>(GetRandomValue(0, 9999)) < drop.scrapChance * 10000.0f) salvage.scrap = drop.scrap;
+    return salvage;
+}
+
+int Economy::resourceCap(Resource resource)
+{
+    static constexpr int kCaps[] = {200, 120, 6};
+    static_assert(sizeof(kCaps) / sizeof(kCaps[0]) == static_cast<size_t>(Resource::Count), "un plafond par ressource");
+    return kCaps[static_cast<size_t>(resource)];
+}
+
+void Economy::addResource(Resource resource, int amount)
+{
+    int& stock = resources_[static_cast<size_t>(resource)];
+    stock = std::min(resourceCap(resource), stock + amount);
+}
+
+bool Economy::spendResource(Resource resource, int amount)
+{
+    int& stock = resources_[static_cast<size_t>(resource)];
+    if (amount > stock) return false;
+    stock -= amount;
+    return true;
+}
+
 void Economy::addGold(int amount)
 {
     gold_ += amount;

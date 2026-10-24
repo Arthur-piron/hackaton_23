@@ -3,7 +3,12 @@
 #include "game/Enemy.hpp"
 #include "game/Events.hpp"
 
-// Or, XP, niveaux et combo du joueur pendant une partie.
+#include <array>
+
+// Ressources de construction (docs/GAME.md §7.1) : bois, ferraille, bidons de carburant.
+enum class Resource { Wood, Scrap, Fuel, Count };
+
+// Or, XP, niveaux, combo et ressources du joueur pendant une partie.
 // L'or et l'XP d'une mort ne sont crédités qu'au ramassage (voir Pickups).
 class Economy {
 public:
@@ -14,6 +19,15 @@ public:
         int gold = 0; // déjà multiplié par le combo
         int xp = 0;
     };
+    // Bois et ferraille lâchés par une mort (pas de multiplicateur de combo).
+    struct Salvage {
+        int wood = 0;
+        int scrap = 0;
+    };
+
+    // Tire au hasard le bois et la ferraille d'une mort (table de GAME.md §7.1).
+    static Salvage rollSalvage(EnemyType type);
+    static int resourceCap(Resource resource);
 
     void reset();
     void update(float dt);
@@ -30,6 +44,11 @@ public:
     void addXp(int amount, EventQueue& events);
     // Débite l'or si le joueur en a assez.
     bool spend(int amount);
+    // Ajoute une ressource, dans la limite de son plafond.
+    void addResource(Resource resource, int amount);
+    // Débite une ressource si le joueur en a assez.
+    bool spendResource(Resource resource, int amount);
+    int resource(Resource resource) const { return resources_[static_cast<size_t>(resource)]; }
 
     int gold() const { return gold_; }
     // XP accumulée dans le niveau courant.
@@ -61,4 +80,5 @@ private:
     float comboTimer_ = 0.0f;
     float goldMultiplier_ = 1.0f;
     int cardRerolls_ = 0;
+    std::array<int, static_cast<size_t>(Resource::Count)> resources_{20, 6, 1}; // dotation de départ
 };

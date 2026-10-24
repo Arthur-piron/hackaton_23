@@ -7,15 +7,20 @@
 #include "fx/PostFx.hpp"
 #include "game/CameraRig.hpp"
 #include "game/CardEffects.hpp"
+#include "game/Altar.hpp"
+#include "game/BuildMode.hpp"
 #include "game/Cards.hpp"
+#include "game/Crates.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
+#include "game/FlowField.hpp"
 #include "game/Flashlight.hpp"
 #include "game/FlyingLanterns.hpp"
 #include "game/Merchant.hpp"
 #include "game/MusicDirector.hpp"
 #include "game/MysteryBox.hpp"
 #include "game/Shop.hpp"
+#include "game/Structures.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Progression.hpp"
@@ -24,6 +29,7 @@
 #include "game/Weapon.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
+#include "ui/BuildBar.hpp"
 #include "ui/CardPicker.hpp"
 #include "ui/Hud.hpp"
 #include "ui/MainMenu.hpp"
@@ -99,6 +105,11 @@ private:
     void openShop();
     // Arme prise à la boîte mystère : débloquée, dorée si légendaire, et en main.
     void takeMysteryPrize(const MysteryBox::Prize& prize);
+    // Contenu d'une caisse cassée : bois, ferraille, munitions, bidon, ou explosion du tonneau de poudre.
+    void breakCrate(const Crates::Broken& crate);
+    // Base (GAME.md §7) : mode construction et structures. Vrai si le joueur construit (arme rangée).
+    bool updateBase(float dt, const Controls& c);
+    void drawBase() const;
     void updateShop(float dt);
     void updateTalents(float dt);
     // Fin de partie : ossements gagnés, records et sauvegarde, puis écran de fin.
@@ -133,6 +144,13 @@ private:
     std::unique_ptr<Player> player_;
     std::unique_ptr<Merchant> merchant_; // nul si la carte n'en déclare pas
     std::unique_ptr<MysteryBox> mysteryBox_; // nulle si la carte n'en déclare pas ; référence world_
+    std::unique_ptr<Altar> altar_;           // nul si la carte n'en déclare pas
+    std::unique_ptr<Crates> crates_;         // référence world_ : détruit avant lui
+    std::unique_ptr<Structures> structures_; // référence world_ : détruit avant lui
+    BuildMode buildMode_;
+    BuildBar buildBar_;
+    FlowField flowField_;        // navigation des morts, recalculée toutes les kFlowFieldInterval
+    float flowFieldTimer_ = 0.0f;
     std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;

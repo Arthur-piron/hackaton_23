@@ -80,6 +80,20 @@ constexpr Color kBoneColor = {235, 225, 195, 255};
 constexpr Color kRecordColor = {255, 205, 90, 255};
 constexpr int kArmoryWeapon = 1; // talent Arsenal : fusil à pompe (indice dans Arsenal::catalog)
 constexpr float kGateShake = 0.3f;
+constexpr Color kAltarHealColor = {170, 225, 255, 255};
+// Caisses (GAME.md §7.1) : 2 + nombre de zones ouvertes à chaque pause.
+constexpr int kCratesPerPause = 2;
+constexpr int kCrateChunks = 12;
+constexpr Color kCrateWoodColor = {150, 105, 60, 255};
+constexpr float kBlastCrateDamage = 60.0f;
+constexpr float kPowderRadius = 3.0f;
+constexpr float kPowderDamage = 60.0f;
+constexpr float kPowderPlayerDamage = 20.0f;
+constexpr Color kPowderColor = {255, 140, 50, 255};
+// Base : navigation et dégâts des morts aux structures (GAME.md §7.4).
+constexpr float kFlowFieldInterval = 0.25f;
+constexpr float kStructureReach = 0.35f;   // au-delà de son rayon, un mort frappe la structure
+constexpr float kStructureDestroyShake = 0.15f;
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -191,6 +205,10 @@ Game::Game(const Options& options)
         lighting_->apply(merchantModel_->model());
         merchant_ = std::make_unique<Merchant>(*merchantModel_, map.merchants.front());
     }
+    crates_ = std::make_unique<Crates>(*world_);
+    structures_ = std::make_unique<Structures>(*world_);
+    waves_->setFlowField(&flowField_);
+    if (!map.altars.empty()) altar_ = std::make_unique<Altar>(map.altars.front());
     if (!map.mysteryBoxes.empty()) {
         mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
         mysteryBox_->applyLighting(*lighting_);
@@ -220,6 +238,14 @@ Game::Game(const Options& options)
             economy_.addGold(MysteryBox::kPrice);
             mysteryBox_->interact(mysteryBox_->position(), *zones_, economy_, events_);
         }
+        crates_->spawnWave(Crates::kMaxCrates, *zones_, player_->position());
+        // Une palissade, une barricade et une porte devant le joueur.
+        for (int i = 0; i < static_cast<int>(StructureKind::Count); ++i) {
+            structures_->place(static_cast<StructureKind>(i),
+                               Vector3Add(player_->position(), {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
+        }
+        // Des morts derrière la palissade : ils la frappent pour passer (barre de PV sur la capture).
+        waves_->spawnRing(Vector3Add(player_->position(), {2.0f, 0.0f, 4.0f}), 0.6f, 3, EnemyType::Walker);
         musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
     } else {
         musicDirector_.menu(audio_);
@@ -238,6 +264,8 @@ Game::~Game()
     merchant_.reset();
     merchantModel_.reset();
     mysteryBox_.reset();
+    crates_.reset();
+    structures_.reset();
     player_.reset();
     playerModel_.reset();
     zones_.reset();
@@ -305,6 +333,11 @@ void Game::startNewGame()
     player_->reset(world_->playerSpawn());
     zones_->reset();
     if (mysteryBox_) mysteryBox_->reset();
+    if (altar_) altar_->reset();
+    crates_->clear();
+    structures_->clear();
+    buildMode_.reset();
+    flowFieldTimer_ = 0.0f;
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
@@ -464,6 +497,7 @@ void Game::updateLighting(float dt)
     lighting_->addLight(fill);
     for (const PointLight& lantern : flyingLanterns_.lights()) lighting_->addLight(lantern);
     if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
+    if (altar_) lighting_->addLight(altar_->light());
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -493,8 +527,9 @@ void Game::updatePlaying(float dt)
     }
 
     player_->update(dt, *world_, c.aim, alive ? c.move : Vector3{0.0f, 0.0f, 0.0f}, c.sprint);
-    flashlight_.update(dt, alive && c.light, player_->position(), events_);
-    if (alive) {
+    const bool building = updateBase(dt, c);
+    flashlight_.update(dt, alive && c.light && !building, player_->position(), events_);
+    if (alive && !building) {
         if (c.selectWeapon >= 0) arsenal_.select(c.selectWeapon);
         if (c.cycleWeapon != 0) arsenal_.cycle(c.cycleWeapon);
         if (arsenal_.update(dt, c.fireHeld, c.firePressed, c.reload, player_->muzzle(), player_->forward(),
@@ -516,12 +551,16 @@ void Game::updatePlaying(float dt)
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
         } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
             takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
+        } else if (altar_ && altar_->inReach(player_->position())) {
+            altar_->tryUse(player_->position(), player_->health() < player_->maxHealth(), *zones_, events_);
         } else {
             zones_->tryOpenNearest(player_->position(), economy_, events_);
         }
     }
     zones_->update(dt);
     if (mysteryBox_) mysteryBox_->update(dt, *zones_, events_);
+    if (altar_) altar_->update(dt);
+    for (const Crates::Broken& crate : crates_->update(dt, events_)) breakCrate(crate);
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
@@ -642,6 +681,7 @@ void Game::resolveProjectiles()
             }
         }
         if (p.alive && blocked) {
+            crates_->hitAt(impact, p.damage);
             p.alive = false;
             events_.push_back({EventType::BulletImpact, impact, 0.0f, Vector3Normalize(p.velocity)});
         }
@@ -783,6 +823,76 @@ void Game::takeMysteryPrize(const MysteryBox::Prize& prize)
                   prize.legendary ? kGateColor : kWaveColor);
 }
 
+void Game::breakCrate(const Crates::Broken& crate)
+{
+    const Vector3 at = crate.position;
+    switch (crate.kind) {
+    case CrateKind::Wood: pickups_.spawnResource(Resource::Wood, GetRandomValue(3, 5), at); break;
+    case CrateKind::Large:
+        pickups_.spawnResource(Resource::Scrap, GetRandomValue(2, 4), at);
+        pickups_.spawnResource(Resource::Wood, GetRandomValue(1, 2), at);
+        break;
+    case CrateKind::Ammo:
+        // Un chargeur de réserve pour l'arme en main.
+        arsenal_.addAmmo(arsenal_.current(), arsenal_.magazineSize());
+        pickups_.spawnResource(Resource::Scrap, GetRandomValue(1, 2), at);
+        audio_.play("reload", 0.7f, 0.0f);
+        break;
+    case CrateKind::Barrel:
+        if (chance(0.6f)) {
+            pickups_.spawnResource(Resource::Fuel, 1, at);
+        } else {
+            pickups_.spawnLoot(at, GetRandomValue(10, 20), 0);
+        }
+        break;
+    case CrateKind::Powder:
+        cardEffects_.addBlast(Vector3Add(at, {0.0f, 1.0f, 0.0f}), kPowderRadius, kPowderColor);
+        events_.push_back({EventType::Explosion, at, kPowderRadius});
+        for (Enemy& e : waves_->enemies()) {
+            if (!e.isAlive() || flatDistance(e.position(), at) > kPowderRadius + e.radius()) continue;
+            damageEnemy(e, kPowderDamage, flatDirection(at, e.position()), kNecroticKnockback);
+        }
+        if (!player_->isDead() && flatDistance(player_->position(), at) <= kPowderRadius) {
+            hurtPlayer(kPowderPlayerDamage, at);
+        }
+        break;
+    case CrateKind::Count: break;
+    }
+}
+
+bool Game::updateBase(float dt, const Controls& c)
+{
+    structures_->update(dt, player_->position());
+    flowFieldTimer_ -= dt;
+    if (flowFieldTimer_ <= 0.0f) {
+        flowFieldTimer_ = kFlowFieldInterval;
+        flowField_.rebuild(*world_, *zones_, *structures_, player_->position());
+    }
+    // Un mort au contact d'une structure qui lui barre la route la frappe.
+    for (const Enemy& e : waves_->enemies()) {
+        if (!e.isAlive() || e.stats().ethereal) continue;
+        const int id = structures_->blockingNear(e.position(), e.radius() + kStructureReach);
+        if (id >= 0) structures_->damage(id, Structures::damagePerSecond(e.type()) * dt, events_);
+    }
+    if (player_->isDead()) {
+        buildMode_.reset();
+        return false;
+    }
+    BuildMode::Surroundings around{*world_, *zones_, player_->position(), {}};
+    if (merchant_) around.keepClear.push_back(merchant_->position());
+    if (mysteryBox_) around.keepClear.push_back(mysteryBox_->position());
+    if (altar_) around.keepClear.push_back(altar_->position());
+    buildMode_.update(c.aim, waves_->phase() == WaveManager::Phase::Intermission, around, *structures_, economy_,
+                      events_);
+    return buildMode_.isActive();
+}
+
+void Game::drawBase() const
+{
+    structures_->draw();
+    buildMode_.drawWorld(*structures_);
+}
+
 void Game::updateShop(float dt)
 {
     audio_.setListener(player_->position());
@@ -869,6 +979,9 @@ void Game::rewardKill(const Enemy& enemy)
     const Economy::Reward reward = economy_.addKill(enemy.type());
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
+    const Economy::Salvage salvage = Economy::rollSalvage(enemy.type());
+    pickups_.spawnResource(Resource::Wood, salvage.wood, enemy.hitCenter());
+    pickups_.spawnResource(Resource::Scrap, salvage.scrap, enemy.hitCenter());
     hud_.pulseCombo();
 
     // Crochet onKill : Vampirisme, Explosion nécrotique, Fortune du mort.
@@ -953,9 +1066,13 @@ void Game::handleEvents()
             audio_.play("wave_bell", 0.8f, 0.0f);
             hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
             lastStandReady_ = true;
+            if (altar_) altar_->recharge();
+            buildMode_.reset();
             break;
         case EventType::WaveCleared:
             audio_.play("ui_confirm", 0.7f, 0.0f);
+            crates_->spawnWave(kCratesPerPause + static_cast<int>(zones_->openAreas().size()), *zones_,
+                               player_->position());
             hud_.announce("VAGUE TERMINÉE", waves_->allWavesCleared() ? "L'aube se lève..." : "Reprends ton souffle",
                           kClearColor);
             break;
@@ -984,6 +1101,7 @@ void Game::handleEvents()
             audio_.playAt("hit_wood", ev.position, 0.3f, 0.15f);
             break;
         case EventType::Explosion:
+            crates_->queueBlast(ev.position, ev.value, kBlastCrateDamage);
             audio_.playAt("hit_heavy", ev.position, 0.8f, 0.2f);
             cameraRig_.shake(kExplosionShake * std::min(1.0f, ev.value / kNecroticRadius));
             lighting_->flash({Vector3Add(ev.position, {0.0f, kExplosionLightHeight, 0.0f}), kExplosionLightColor,
@@ -1026,6 +1144,50 @@ void Game::handleEvents()
                 audio_.playAt("ui_confirm", ev.position, 0.8f, 0.1f);
             }
             break;
+        case EventType::BuildDenied:
+            audio_.play("dry_fire", 0.5f, 0.0f);
+            if (waves_->phase() != WaveManager::Phase::Intermission) {
+                hud_.announce("PAS PENDANT L'ASSAUT", "Construis entre les vagues (B)", kWaveColor);
+            }
+            break;
+        case EventType::StructurePlaced:
+            audio_.playAt("hit_wood", ev.position, 0.8f, 0.15f);
+            particles_->debris(ev.position, kCrateWoodColor, 0);
+            break;
+        case EventType::StructureRemoved:
+            audio_.play("pickup", 0.6f, 0.1f);
+            particles_->debris(ev.position, kCrateWoodColor, kCrateChunks / 2);
+            break;
+        case EventType::StructureDamaged:
+            audio_.playAt("hit_wood", ev.position, 0.5f, 0.2f);
+            particles_->debris(Vector3Add(ev.position, {0.0f, 0.6f, 0.0f}), kCrateWoodColor, 5);
+            break;
+        case EventType::StructureDestroyed:
+            audio_.playAt("hit_heavy", ev.position, 0.9f, 0.1f);
+            particles_->debris(ev.position, kCrateWoodColor, 20);
+            cameraRig_.shake(kStructureDestroyShake);
+            break;
+        case EventType::ResourcePicked:
+            audio_.play("pickup", 0.35f, 0.2f);
+            hud_.pulseResources();
+            break;
+        case EventType::CrateLanded:
+            audio_.playAt("body_fall", ev.position, 0.5f, 0.2f);
+            particles_->debris(ev.position, kCrateWoodColor, 0);
+            break;
+        case EventType::CrateBroken:
+            audio_.playAt("hit_wood", ev.position, 0.9f, 0.15f);
+            particles_->debris(ev.position, kCrateWoodColor, kCrateChunks);
+            break;
+        case EventType::AltarUsed: {
+            const float healed = player_->maxHealth() - player_->health();
+            player_->heal(healed);
+            audio_.playAt("wave_bell", ev.position, 0.7f, 0.0f);
+            audio_.play("pickup", 0.8f, 0.0f);
+            hud_.addDamageNumber(Vector3Add(player_->position(), {0.0f, 2.0f, 0.0f}), healed, kAltarHealColor);
+            hud_.announce("PRIÈRE EXAUCÉE", "Ta vie est restaurée", kAltarHealColor);
+            break;
+        }
         case EventType::MysteryBoxMoved:
             audio_.playAt("hit_heavy", ev.position, 0.9f, 0.0f);
             cameraRig_.shake(kGateShake);
@@ -1084,6 +1246,9 @@ HudData Game::hudData() const
     d.combo = economy_.combo();
     d.comboMultiplier = economy_.comboMultiplier();
     d.comboTimeLeft = economy_.comboTimeLeft() / Economy::kComboWindow;
+    d.wood = economy_.resource(Resource::Wood);
+    d.scrap = economy_.resource(Resource::Scrap);
+    d.fuel = economy_.resource(Resource::Fuel);
     for (CardId id : cards_.owned()) {
         const CardInfo& card = Cards::info(id);
         d.cards.push_back({card.shortName, CardPicker::categoryColor(card.category),
@@ -1112,8 +1277,17 @@ void Game::draw() const
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
             if (merchant_) merchant_->drawPrompt(cameraRig_.camera(), player_->position(), intermission);
             if (mysteryBox_) mysteryBox_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold(), *zones_);
+            if (altar_) {
+                altar_->drawPrompt(cameraRig_.camera(), player_->position(),
+                                   player_->health() < player_->maxHealth(), *zones_);
+            }
         }
         hud_.draw(cameraRig_.camera(), hudData());
+        if (state_ == State::Playing) {
+            structures_->drawHealthBars(cameraRig_.camera(), player_->position());
+            buildMode_.drawPrompt(cameraRig_.camera());
+            buildBar_.draw(buildMode_, economy_);
+        }
         if (state_ == State::LevelUp) cardPicker_.draw();
         if (state_ == State::Shop) {
             shopScreen_.draw(*shop_, arsenal_, economy_.gold(), shopFrozenLeft_, waves_->intermissionLeft());
@@ -1134,6 +1308,8 @@ void Game::drawWorld() const
     zones_->draw();
     if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
     if (mysteryBox_) mysteryBox_->draw(weaponModels_);
+    crates_->draw();
+    drawBase();
     waves_->draw();
     cardEffects_.draw(waves_->enemies());
     const int weapon = arsenal_.current();

@@ -128,6 +128,14 @@ bool parseMerchant(std::istringstream& in, MapData& map)
     return true;
 }
 
+bool parseAltar(std::istringstream& in, MapData& map)
+{
+    AltarDef a;
+    if (!(in >> a.position.x >> a.position.z)) return false;
+    map.altars.push_back(a);
+    return true;
+}
+
 bool parseMysteryBox(std::istringstream& in, MapData& map)
 {
     MysteryBoxDef b;
@@ -169,6 +177,7 @@ MapData loadMapFile(const std::string& path)
         else if (command == "player") ok = parsePlayer(in, map);
         else if (command == "merchant") ok = parseMerchant(in, map);
         else if (command == "mysterybox") ok = parseMysteryBox(in, map);
+        else if (command == "altar") ok = parseAltar(in, map);
         if (!ok) TraceLog(LOG_WARNING, "MAP: %s:%d ligne ignoree : %s", path.c_str(), number, line.c_str());
     }
     return map;

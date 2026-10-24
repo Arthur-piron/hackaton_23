@@ -34,6 +34,15 @@ enum class EventType {
     MysteryBoxTick,     // l'arme affichée change pendant le tirage
     MysteryBoxReady,    // l'arme tirée flotte au-dessus de la boîte ; value = 1 si légendaire
     MysteryBoxMoved,    // la boîte s'envole (position de départ) vers un autre emplacement
+    AltarUsed,          // prière à l'autel de la chapelle : soins complets
+    CrateLanded,        // une caisse touche le sol
+    CrateBroken,        // value = CrateKind
+    ResourcePicked,     // value = quantité, direction.x = Resource
+    BuildDenied,        // pose refusée, ou mode construction hors des pauses
+    StructurePlaced,    // value = StructureKind
+    StructureRemoved,   // revente ou annulation
+    StructureDamaged,   // un mort frappe une structure ; value = StructureKind
+    StructureDestroyed, // value = StructureKind
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

@@ -32,6 +32,12 @@ public:
     // Ouvre la grille fermée la plus proche (à portée) si l'or suffit, et débite le prix.
     bool tryOpenNearest(Vector3 player, Economy& economy, EventQueue& events);
 
+    // Emprise au sol (x, z, largeur, profondeur) de chaque zone ouverte.
+    std::vector<Rectangle> openAreas() const;
+    // Rectangle (x, z, largeur, profondeur) qui englobe toutes les zones.
+    Rectangle bounds() const;
+    // Centres des grilles (on ne construit pas devant).
+    std::vector<Vector3> gateCenters() const;
     // Points d'apparition des zones ouvertes.
     std::vector<Vector3> openSpawnPoints() const;
     // Point vers lequel marcher depuis `from` pour rejoindre `target` :

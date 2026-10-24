@@ -206,6 +206,35 @@ bool Zones::tryOpenNearest(Vector3 player, Economy& economy, EventQueue& events)
     return true;
 }
 
+Rectangle Zones::bounds() const
+{
+    Vector2 lo = {1e9f, 1e9f};
+    Vector2 hi = {-1e9f, -1e9f};
+    for (const Zone& zone : zones_) {
+        lo = Vector2Min(lo, zone.def.min);
+        hi = Vector2Max(hi, zone.def.max);
+    }
+    return {lo.x, lo.y, hi.x - lo.x, hi.y - lo.y};
+}
+
+std::vector<Vector3> Zones::gateCenters() const
+{
+    std::vector<Vector3> centers;
+    for (const Gate& gate : gates_) centers.push_back(gate.center);
+    return centers;
+}
+
+std::vector<Rectangle> Zones::openAreas() const
+{
+    std::vector<Rectangle> areas;
+    for (const Zone& zone : zones_) {
+        if (!zone.open) continue;
+        const ZoneDef& d = zone.def;
+        areas.push_back({d.min.x, d.min.y, d.max.x - d.min.x, d.max.y - d.min.y});
+    }
+    return areas;
+}
+
 std::vector<Vector3> Zones::openSpawnPoints() const
 {
     std::vector<Vector3> points;

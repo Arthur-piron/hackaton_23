@@ -1,6 +1,7 @@
 #include "game/WaveManager.hpp"
 
 #include "core/AssetPath.hpp"
+#include "game/FlowField.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
 #include "raymath.h"
@@ -185,12 +186,17 @@ Vector3 WaveManager::lightEscape(Vector3 position) const
     return escape;
 }
 
+Vector3 WaveManager::route(Vector3 from, Vector3 playerPosition, const Zones& zones) const
+{
+    return flowField_ ? flowField_->waypoint(from, playerPosition) : zones.steer(from, playerPosition);
+}
+
 EnemySenses WaveManager::sense(const Enemy& enemy, Vector3 playerPosition, Vector3 playerForward,
                                const Zones& zones) const
 {
     EnemySenses senses;
     // Les spectres traversent les grilles : ils vont droit sur le joueur.
-    senses.goal = enemy.stats().ethereal ? playerPosition : zones.steer(enemy.position(), playerPosition);
+    senses.goal = enemy.stats().ethereal ? playerPosition : route(enemy.position(), playerPosition, zones);
     senses.player = playerPosition;
     senses.playerForward = playerForward;
     senses.inFlashlight = false;
@@ -232,7 +238,7 @@ void WaveManager::collide(float dt, Vector3 playerPosition, const World& world, 
         if (pushed > 1e-4f) {
             // Le décor l'a repoussé : s'il fonce droit dans l'obstacle, il le longe vers sa cible.
             const Vector3 normal = Vector3Scale(correction, 1.0f / pushed);
-            const Vector3 goal = zones.steer(position, playerPosition);
+            const Vector3 goal = route(position, playerPosition, zones);
             const Vector3 toGoal = Vector3Normalize({goal.x - position.x, 0.0f, goal.z - position.z});
             if (Vector3DotProduct(normal, toGoal) < -kHeadOnThreshold) {
                 Vector3 tangent = {-normal.z, 0.0f, normal.x};
