@@ -37,6 +37,7 @@ enum class EventType {
     AltarUsed,          // prière à l'autel de la chapelle : soins complets
     CrateLanded,        // une caisse touche le sol
     CrateBroken,        // value = CrateKind
+    ResourcePicked,     // value = quantité, direction.x = Resource
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.
