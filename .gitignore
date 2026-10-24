@@ -28,3 +28,4 @@ out/
 .vs/
 *.user
 CMakeUserPresets.json
+lastlight_save.txt

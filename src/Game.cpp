@@ -69,6 +69,7 @@ constexpr Color kWaveColor = {230, 200, 120, 255};
 constexpr Color kClearColor = {140, 230, 150, 255};
 constexpr Color kLevelColor = {90, 235, 200, 255};
 constexpr Color kGateColor = {255, 215, 120, 255};
+constexpr Color kBoneColor = {235, 225, 195, 255};
 constexpr float kGateShake = 0.3f;
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
@@ -136,6 +137,8 @@ Game::Game(const Options& options)
     SetExitKey(KEY_NULL); // Échap sert à la pause, pas à quitter.
     HideCursor();         // remplacé par le réticule du HUD
 
+    // En --smoke, la vraie sauvegarde n'est ni lue ni écrite.
+    progression_ = std::make_unique<Progression>(SaveFile::defaultPath(), options_.smokeFrames == 0);
     const MapData map = loadMapFile(assetPath("maps/graveyard.txt"));
     world_ = std::make_unique<World>(map);
     zones_ = std::make_unique<Zones>(map, *world_);
@@ -237,6 +240,7 @@ void Game::startNewGame()
 {
     // Les bonus des cartes sont remis à zéro d'abord : la vie et les chargeurs en dépendent.
     cards_.reset();
+    cards_.setRarityBonus(progression_->rarityBonusPercent());
     applyCardModifiers();
     cardEffects_.clear();
     pendingExplosions_.clear();
@@ -249,6 +253,7 @@ void Game::startNewGame()
     waves_->reset();
     projectiles_.clear();
     economy_.reset();
+    economy_.addGold(progression_->startGold());
     pickups_.clear();
     particles_->clear();
     hud_.clear();
@@ -257,6 +262,7 @@ void Game::startNewGame()
     score_ = 0;
     kills_ = 0;
     hitStop_ = 0.0f;
+    bonesEarned_ = 0;
 }
 
 Vector3 Game::mouseGroundPoint() const
@@ -322,7 +328,14 @@ void Game::update(float dt)
             startNewGame();
             audio_.playMusic("night_ambience.ogg", 0.6f);
             state_ = State::Playing;
+        } else if (IsKeyPressed(KEY_T)) {
+            talentScreen_.open();
+            audio_.play("ui_click", 0.8f, 0.0f);
+            state_ = State::Talents;
         }
+        break;
+    case State::Talents:
+        updateTalents(dt);
         break;
     case State::Playing:
         if (IsKeyPressed(KEY_ESCAPE)) {
@@ -449,9 +462,9 @@ void Game::updatePlaying(float dt)
     handleEvents();
 
     if (player_->deathFinished()) {
-        state_ = State::GameOver;
+        endRun(false);
     } else if (waves_->allWavesCleared()) {
-        state_ = State::Victory;
+        endRun(true);
     } else if (!player_->isDead() && economy_.pendingLevelUps() > 0 && levelUpSlowMo_ <= 0.0f) {
         levelUpSlowMo_ = kLevelUpSlowMo;
     }
@@ -629,7 +642,7 @@ void Game::applyCardModifiers()
     arsenal_.setModifiers(m);
     player_->setSpeedMultiplier(m.moveSpeedMultiplier);
     player_->setStaminaMultipliers(m.staminaMultiplier, m.staminaRegenMultiplier);
-    player_->setMaxHealthBonus(m.maxHealthBonus);
+    player_->setMaxHealthBonus(m.maxHealthBonus + progression_->startHealthBonus());
     economy_.setGoldMultiplier(m.goldMultiplier);
     pickups_.setMagnetMultiplier(m.magnetMultiplier);
 }
@@ -668,6 +681,26 @@ void Game::updateLevelUp(float dt)
     state_ = State::Playing;
     // Plusieurs niveaux d'un coup : les choix s'enchaînent.
     if (economy_.pendingLevelUps() > 0) openCardPicker();
+}
+
+void Game::updateTalents(float dt)
+{
+    const TalentScreen::Result result = talentScreen_.update(dt);
+    if (result.moved) audio_.play("ui_click", 0.35f, 0.1f);
+    if (result.purchase >= 0) {
+        const bool bought = progression_->buy(static_cast<TalentId>(result.purchase));
+        talentScreen_.notifyPurchase(bought);
+        audio_.play(bought ? "ui_confirm" : "dry_fire", 0.8f, 0.0f);
+    }
+    if (result.close) state_ = State::Menu;
+}
+
+void Game::endRun(bool victory)
+{
+    // Une vague est « survécue » quand elle est terminée : celle en cours ne compte pas.
+    const int survived = victory ? waves_->wave() : waves_->wave() - 1;
+    bonesEarned_ = progression_->finishRun(survived, score_, victory);
+    state_ = victory ? State::Victory : State::GameOver;
 }
 
 void Game::rewardKill(const Enemy& enemy)
@@ -857,6 +890,8 @@ void Game::draw() const
 
     if (state_ == State::Menu) {
         drawMenu();
+    } else if (state_ == State::Talents) {
+        talentScreen_.draw(*progression_);
     } else {
         postFx_->begin();
         ClearBackground(kBackgroundColor);
@@ -920,6 +955,8 @@ void Game::drawMenu() const
     DrawText(tagline, (w - MeasureText(tagline, 22)) / 2, h / 4 + 110, 22, {180, 170, 150, 255});
     const char* hint = "Entree pour commencer";
     DrawText(hint, (w - MeasureText(hint, 28)) / 2, h / 2 + 20, 28, RAYWHITE);
+    const char* talents = TextFormat("T : talents   (%d ossements)", progression_->bones());
+    DrawText(talents, (w - MeasureText(talents, 22)) / 2, h / 2 + 64, 22, kBoneColor);
     const char* controls = "ZQSD : bouger   Maj : sprint   Souris : viser / tirer   R : recharger   1-4 : armes   E : grille";
     DrawText(controls, (w - MeasureText(controls, 18)) / 2, h - 60, 18, {140, 135, 125, 255});
     DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
@@ -944,6 +981,9 @@ void Game::drawEndScreen(const char* title, Color color) const
     DrawText(title, (w - MeasureText(title, 80)) / 2, h / 3, 80, color);
     const char* stats = TextFormat("Vague %d   -   %d morts   -   score %d", waves_->wave(), kills_, score_);
     DrawText(stats, (w - MeasureText(stats, 26)) / 2, h / 3 + 110, 26, RAYWHITE);
+    const char* bones = TextFormat("+%d ossements   (total %d, record vague %d)", bonesEarned_, progression_->bones(),
+                                   progression_->bestWave());
+    DrawText(bones, (w - MeasureText(bones, 22)) / 2, h / 3 + 150, 22, kBoneColor);
     const char* hint = "Entree : rejouer   Echap : menu";
-    DrawText(hint, (w - MeasureText(hint, 22)) / 2, h / 3 + 170, 22, LIGHTGRAY);
+    DrawText(hint, (w - MeasureText(hint, 22)) / 2, h / 3 + 200, 22, LIGHTGRAY);
 }

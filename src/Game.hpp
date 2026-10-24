@@ -12,6 +12,7 @@
 #include "game/Events.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
+#include "game/Progression.hpp"
 #include "game/Projectile.hpp"
 #include "game/WaveManager.hpp"
 #include "game/Weapon.hpp"
@@ -19,6 +20,7 @@
 #include "game/Zones.hpp"
 #include "ui/CardPicker.hpp"
 #include "ui/Hud.hpp"
+#include "ui/TalentScreen.hpp"
 
 #include <memory>
 #include <string>
@@ -28,7 +30,7 @@
 // les événements de gameplay (son, caméra, HUD).
 class Game {
 public:
-    enum class State { Menu, Playing, Paused, LevelUp, GameOver, Victory };
+    enum class State { Menu, Talents, Playing, Paused, LevelUp, GameOver, Victory };
 
     struct Options {
         int smokeFrames = 0;         // > 0 : mode test automatique
@@ -82,6 +84,9 @@ private:
     // Tire 3 cartes et passe à l'écran de choix (reste en jeu si plus aucune carte n'est disponible).
     void openCardPicker();
     void updateLevelUp(float dt);
+    void updateTalents(float dt);
+    // Fin de partie : ossements gagnés, records et sauvegarde, puis écran de fin.
+    void endRun(bool victory);
     void handleEvents();
     void updateFootsteps(float dt);
     // Lampe torche, lumière d'appoint du joueur et envoi des lumières au shader.
@@ -122,6 +127,9 @@ private:
     CameraRig cameraRig_;
     Hud hud_;
     CardPicker cardPicker_;
+    std::unique_ptr<Progression> progression_;
+    TalentScreen talentScreen_;
+    int bonesEarned_ = 0;          // ossements gagnés par la partie qui vient de finir
     EventQueue events_;
 
     int score_ = 0;
