@@ -24,6 +24,7 @@ constexpr TurretStats kMachineGun = {10.0f, 0.125f, 9.0f, 0, 4.0f, {255, 220, 12
 constexpr float kFlameRange = 5.0f;
 constexpr float kFlameHalfAngle = 20.0f * DEG2RAD;
 constexpr float kFlameDamage = 30.0f;
+constexpr float kLevel3Range = 1.2f;
 constexpr Color kFlameTint = {255, 150, 70, 255};
 constexpr Color kFlameOuter = {255, 110, 30, 90};
 constexpr Color kFlameInner = {255, 200, 90, 140};
@@ -106,7 +107,12 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
         // Le mort le plus proche, à portée et en vue.
         Enemy* target = nullptr;
         const bool flame = kind == StructureKind::FlameThrower;
-        float best = flame ? kFlameRange : stats.range;
+        // Améliorations : dégâts +30 % / +70 %, portée +20 % au niveau 3.
+        const int level = structures.level(id);
+        const float power = Structures::damageMultiplier(level);
+        const float reach = level >= Structures::kMaxLevel ? kLevel3Range : 1.0f;
+        const float range = (flame ? kFlameRange : stats.range) * reach;
+        float best = range;
         for (Enemy& e : enemies) {
             if (!e.isAlive()) continue;
             const float d = Vector2Distance({e.position().x, e.position().z}, {base.x, base.z});
@@ -129,11 +135,11 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
                 if (!e.isAlive()) continue;
                 const Vector3 to = {e.position().x - base.x, 0.0f, e.position().z - base.z};
                 const float d = Vector3Length(to);
-                if (d > kFlameRange + e.radius() || d < 0.01f) continue;
+                if (d > range + e.radius() || d < 0.01f) continue;
                 if (std::acos(std::clamp(Vector3DotProduct(to, direction) / d, -1.0f, 1.0f)) > kFlameHalfAngle) continue;
                 Vector3 blocked;
                 if (world.segmentBlocked(muzzle, e.hitCenter(), blocked)) continue;
-                hits.push_back({&e, kFlameDamage * dt, direction, true});
+                hits.push_back({&e, kFlameDamage * power * dt, direction, true});
             }
             continue;
         }
@@ -144,7 +150,7 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
         const float spread = stats.spread * DEG2RAD * static_cast<float>(GetRandomValue(-100, 100)) / 100.0f;
         const float angle = std::atan2(aim.x - muzzle.x, aim.z - muzzle.z) + spread;
         const Vector3 direction = {std::sin(angle), 0.0f, std::cos(angle)};
-        Vector3 end = Vector3Add(muzzle, Vector3Scale(direction, stats.range));
+        Vector3 end = Vector3Add(muzzle, Vector3Scale(direction, range));
         Vector3 wall;
         if (world.segmentBlocked(muzzle, {end.x, aim.y, end.z}, wall)) end = {wall.x, muzzle.y, wall.z};
         const float length = Vector2Distance({muzzle.x, muzzle.z}, {end.x, end.z});
@@ -159,7 +165,7 @@ std::vector<Turrets::Hit> Turrets::update(float dt, Structures& structures, std:
         }
         std::sort(along.begin(), along.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
         const size_t count = std::min(along.size(), static_cast<size_t>(stats.pierce + 1));
-        for (size_t i = 0; i < count; ++i) hits.push_back({along[i].second, stats.damage, direction});
+        for (size_t i = 0; i < count; ++i) hits.push_back({along[i].second, stats.damage * power, direction});
         if (count > static_cast<size_t>(stats.pierce)) {
             end = Vector3Add(muzzle, Vector3Scale(direction, along[count - 1].first));
         }

@@ -96,6 +96,7 @@ constexpr float kFlowFieldInterval = 0.25f;
 constexpr float kStructureReach = 0.35f;   // au-delà de son rayon, un mort frappe la structure
 constexpr float kStructureDestroyShake = 0.15f;
 constexpr float kTurretKnockback = 2.0f;
+constexpr Color kUpgradeSparkColor = {255, 205, 90, 255};
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -243,14 +244,18 @@ Game::Game(const Options& options)
             mysteryBox_->interact(mysteryBox_->position(), *zones_, economy_, events_);
         }
         crates_->spawnWave(Crates::kMaxCrates, *zones_, player_->position());
-        // Une palissade, une barricade et une porte devant le joueur.
-        for (int i = 0; i < static_cast<int>(StructureKind::Count); ++i) {
-            structures_->place(static_cast<StructureKind>(i),
-                               Vector3Add(player_->position(), {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
-        }
-        // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
+        // Une palissade, une barricade et une porte devant le joueur ; la palissade est au niveau 2.
         const Vector3 me = player_->position();
-        structures_->place(StructureKind::Crossbow, Vector3Add(me, {-2.5f, 0.0f, 1.5f}), false);
+        const StructureKind defenses[] = {StructureKind::Palisade, StructureKind::Barricade, StructureKind::Door};
+        for (int i = 0; i < 3; ++i) {
+            structures_->place(defenses[i], Vector3Add(me, {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
+        }
+        structures_->upgrade(structures_->at(Vector3Add(me, {2.0f, 0.0f, 2.5f})));
+        // Un établi niv. II et une arbalète au niveau 3.
+        structures_->upgrade(structures_->place(StructureKind::Workbench, Vector3Add(me, {4.0f, 0.0f, 5.5f}), false));
+        const int crossbow = structures_->place(StructureKind::Crossbow, Vector3Add(me, {-2.5f, 0.0f, 1.5f}), false);
+        structures_->upgrade(crossbow);
+        structures_->upgrade(crossbow);
         // Un générateur avec un bidon alimente une mitrailleuse et un lampadaire.
         const int generator = structures_->place(StructureKind::Generator, Vector3Add(me, {-5.0f, 0.0f, 3.5f}), false);
         structures_->turret(generator).fuel = 1.0f;
@@ -259,6 +264,7 @@ Game::Game(const Options& options)
         structures_->place(StructureKind::FlameThrower, Vector3Add(me, {1.5f, 0.0f, -1.5f}), false);
         const int projector = structures_->place(StructureKind::Projector, Vector3Add(me, {-1.5f, 0.0f, 0.5f}), false);
         structures_->turret(projector).yaw = PI; // vers la horde, au nord
+        // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
         structures_->place(StructureKind::Spikes, Vector3Add(me, {-1.5f, 0.0f, -2.5f}), false);
         structures_->place(StructureKind::Mine, Vector3Add(me, {0.5f, 0.0f, -3.5f}), false);
         structures_->place(StructureKind::BearTrap, Vector3Add(me, {1.5f, 0.0f, -2.5f}), false);
@@ -607,6 +613,9 @@ void Game::updatePlaying(float dt)
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
         } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
             takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
+        } else if (buildMode_.upgradeWorkbenchNear(player_->position(), intermission, *structures_, economy_,
+                                                   events_)) {
+            // E près de l'établi : il passe au niveau II.
         } else if (generator_.refuelNear(player_->position(), *structures_, economy_, events_)) {
             // E près d'un générateur : un bidon dans le réservoir.
         } else if (traps_.igniteNear(player_->position(), *structures_)) {
@@ -1283,6 +1292,11 @@ void Game::handleEvents()
             } else {
                 audio_.playAt("reload", ev.position, 0.45f, 0.2f);
             }
+            break;
+        case EventType::StructureUpgraded:
+            audio_.playAt("ui_confirm", ev.position, 0.8f, 0.0f);
+            particles_->debris(Vector3Add(ev.position, {0.0f, 0.5f, 0.0f}), kUpgradeSparkColor, 10);
+            hud_.pulseResources();
             break;
         case EventType::GeneratorRefueled:
             audio_.playAt("pickup", ev.position, 0.8f, 0.0f);

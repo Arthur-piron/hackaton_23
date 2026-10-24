@@ -47,6 +47,7 @@ enum class EventType {
     TurretFired,        // value = StructureKind ; direction = sens du tir
     GeneratorRefueled,  // value = bidons dans le réservoir
     GeneratorEmpty,     // un générateur tombe à sec
+    StructureUpgraded,  // value = nouveau niveau
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

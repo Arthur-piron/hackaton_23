@@ -76,6 +76,6 @@ void BuildBar::draw(const BuildMode& mode, const Economy& economy) const
         x += kItemWidth + kGap;
     }
 
-    drawCentered("Clic : poser (glisser : en ligne)   T : tourner   X : revendre   Retour arrière : annuler   B / clic droit : quitter",
+    drawCentered("Clic : poser (glisser : en ligne)   T : tourner   U : améliorer   X : revendre   Retour arrière : annuler   B : quitter",
                  w / 2.0f, bottom + 8.0f, 14, kDim);
 }

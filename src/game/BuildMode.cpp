@@ -26,6 +26,14 @@ constexpr float kKeepClearDistance = 2.0f;
 constexpr float kPlayerClearance = 0.45f;
 constexpr float kSellRefund = 0.5f;
 constexpr int kMaxLamps = 8;
+// Améliorations (GAME.md §7.3) : niv. 2 = coût de base + 50 or ; niv. 3 = 2 × coût de base + 150 or.
+constexpr int kLevel2Gold = 50;
+constexpr int kLevel3Gold = 150;
+// Établi niv. II : 0 bois, 15 ferraille, 300 or.
+constexpr int kWorkbenchScrap = 15;
+constexpr int kWorkbenchGold = 300;
+constexpr float kWorkbenchReach = 2.5f;
+constexpr Color kUpgradeColor = {255, 205, 90, 255};
 
 constexpr Color kCostColor = {235, 225, 200, 255};
 constexpr Color kRefusalColor = {255, 110, 100, 255};
@@ -157,6 +165,9 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
     if (refusal_.empty() && category_ == BuildCategory::Traps && structures.countIn(BuildCategory::Traps) >= Traps::kMaxTraps) {
         refusal_ = TextFormat("Au plus %d pièges", Traps::kMaxTraps);
     }
+    if (refusal_.empty() && selected_ == StructureKind::Workbench && structures.countOf(StructureKind::Workbench) >= 1) {
+        refusal_ = "Un seul établi";
+    }
     // Limites de GAME.md §7.2 : un générateur, huit lampadaires et projecteurs.
     if (refusal_.empty() && selected_ == StructureKind::Generator && structures.countOf(StructureKind::Generator) >= 1) {
         refusal_ = "Un seul générateur";
@@ -171,6 +182,22 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
         refusal_ = TextFormat("Au plus %d tourelles (ouvre d'autres zones)", turretLimit);
     }
 
+    int wood = 0;
+    int scrap = 0;
+    int gold = 0;
+    const std::string upgradeRefusal = checkUpgrade(structures, economy, wood, scrap, gold);
+    upgradeOk_ = structures.exists(hovered_) && upgradeRefusal.empty();
+    upgradeText_ = !structures.exists(hovered_) ? std::string()
+                   : upgradeOk_ ? std::string(TextFormat("U : niveau %d  (%d bois  %d fer  %d or)",
+                                                         structures.level(hovered_) + 1, wood, scrap, gold))
+                                : upgradeRefusal;
+    if (IsKeyPressed(KEY_U)) {
+        if (upgradeOk_) {
+            upgrade(structures, economy, events);
+        } else if (structures.exists(hovered_)) {
+            events.push_back({EventType::BuildDenied, cursor_});
+        }
+    }
     if (IsKeyPressed(KEY_X)) sell(structures, economy, events);
     if (IsKeyPressed(KEY_BACKSPACE)) undo(structures, economy, events);
 
@@ -202,6 +229,67 @@ void BuildMode::place(Vector3 player, Structures& structures, Economy& economy, 
     lastPlaced_ = ghost_;
     refusal_ = "Place occupée";
     events.push_back({EventType::StructurePlaced, ghost_, static_cast<float>(selected_)});
+}
+
+std::string BuildMode::checkUpgrade(const Structures& structures, const Economy& economy, int& wood, int& scrap,
+                                    int& gold) const
+{
+    if (!structures.exists(hovered_)) return "Rien à améliorer";
+    const StructureKind kind = structures.kind(hovered_);
+    if (kind == StructureKind::Workbench) return "Établi : E pour le niveau II";
+    const int next = structures.level(hovered_) + 1;
+    if (next > Structures::kMaxLevel) return "Niveau maximal";
+    // L'établi niv. II débloque le niveau 3.
+    int bench = 0;
+    for (int id : structures.ids()) {
+        if (structures.kind(id) == StructureKind::Workbench) bench = std::max(bench, structures.level(id));
+    }
+    if (bench == 0) return "Un établi est nécessaire";
+    if (next == 3 && bench < 2) return "Établi niv. II nécessaire (E dessus)";
+    const StructureInfo& s = Structures::info(kind);
+    const int factor = next == 2 ? 1 : 2;
+    wood = s.wood * factor;
+    scrap = s.scrap * factor;
+    gold = s.gold * factor + (next == 2 ? kLevel2Gold : kLevel3Gold);
+    if (economy.resource(Resource::Wood) < wood) return "Pas assez de bois";
+    if (economy.resource(Resource::Scrap) < scrap) return "Pas assez de ferraille";
+    if (economy.gold() < gold) return "Pas assez d'or";
+    return {};
+}
+
+void BuildMode::upgrade(Structures& structures, Economy& economy, EventQueue& events)
+{
+    int wood = 0;
+    int scrap = 0;
+    int gold = 0;
+    if (!checkUpgrade(structures, economy, wood, scrap, gold).empty()) return;
+    economy.spendResource(Resource::Wood, wood);
+    economy.spendResource(Resource::Scrap, scrap);
+    economy.spend(gold);
+    structures.upgrade(hovered_);
+    events.push_back({EventType::StructureUpgraded, structures.center(hovered_),
+                      static_cast<float>(structures.level(hovered_))});
+}
+
+bool BuildMode::upgradeWorkbenchNear(Vector3 player, bool intermission, Structures& structures, Economy& economy,
+                                     EventQueue& events) const
+{
+    for (int id : structures.ids()) {
+        if (structures.kind(id) != StructureKind::Workbench) continue;
+        if (distanceToBox(player, structures.bounds(id)) > kWorkbenchReach) continue;
+        const bool ok = intermission && structures.level(id) < 2 && economy.resource(Resource::Scrap) >= kWorkbenchScrap &&
+                        economy.gold() >= kWorkbenchGold;
+        if (ok) {
+            economy.spendResource(Resource::Scrap, kWorkbenchScrap);
+            economy.spend(kWorkbenchGold);
+            structures.upgrade(id);
+            events.push_back({EventType::StructureUpgraded, structures.center(id), 2.0f});
+        } else {
+            events.push_back({EventType::BuildDenied, structures.center(id)});
+        }
+        return true;
+    }
+    return false;
 }
 
 void BuildMode::sell(Structures& structures, Economy& economy, EventQueue& events)
@@ -265,7 +353,12 @@ void BuildMode::drawWorld(const Structures& structures) const
 
 void BuildMode::drawPrompt(const Camera3D& camera) const
 {
-    if (!active_ || items().empty()) return;
+    if (!active_) return;
+    if (!upgradeText_.empty()) {
+        const Vector2 at = GetWorldToScreen(Vector3Add(cursor_, {0.0f, 1.2f, 0.0f}), camera);
+        drawCenteredText(upgradeText_.c_str(), at, 18, upgradeOk_ ? kUpgradeColor : kRefusalColor);
+    }
+    if (items().empty()) return;
     const Vector2 screen = GetWorldToScreen(Vector3Add(ghost_, {0.0f, 2.2f, 0.0f}), camera);
     if (!refusal_.empty()) {
         drawCenteredText(refusal_.c_str(), screen, 20, kRefusalColor);

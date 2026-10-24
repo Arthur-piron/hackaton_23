@@ -69,6 +69,8 @@ Traps::Result Traps::update(float dt, Structures& structures, std::vector<Enemy>
         const BoundingBox box = structures.bounds(id);
         const Vector3 center = structures.center(id);
         trap.timer = std::max(0.0f, trap.timer - dt);
+        // Améliorations : dégâts +30 % / +70 %.
+        const float power = Structures::damageMultiplier(structures.level(id));
 
         switch (kind) {
         case StructureKind::Spikes:
@@ -83,7 +85,7 @@ Traps::Result Traps::update(float dt, Structures& structures, std::vector<Enemy>
                 if (cooling) continue;
                 trap.cooldowns.push_back({e.id(), kSpikeCooldown});
                 e.slow(kSpikeSlow, kSpikeSlowTime);
-                result.hits.push_back({&e, kSpikeDamage, false});
+                result.hits.push_back({&e, kSpikeDamage * power, false});
                 events.push_back({EventType::TrapTriggered, center, static_cast<float>(kind)});
                 if (--trap.uses <= 0) break;
             }
@@ -100,7 +102,7 @@ Traps::Result Traps::update(float dt, Structures& structures, std::vector<Enemy>
                     }
                 }
             } else if (trap.timer <= 0.0f) {
-                result.blasts.push_back({center, kMineRadius, kMineDamage, kMineKnockback});
+                result.blasts.push_back({center, kMineRadius, kMineDamage * power, kMineKnockback});
                 trap.uses = 0;
             }
             break;
@@ -116,7 +118,7 @@ Traps::Result Traps::update(float dt, Structures& structures, std::vector<Enemy>
             for (Enemy& e : enemies) {
                 if (!e.isAlive() || e.stats().ethereal || !inside(e.position(), box, 0.0f)) continue;
                 e.slow(kOilSlow, kOilSlowRefresh);
-                if (trap.active) result.hits.push_back({&e, kOilBurnDamage * dt, true});
+                if (trap.active) result.hits.push_back({&e, kOilBurnDamage * power * dt, true});
             }
             if (trap.active && trap.timer <= 0.0f) trap.uses = 0;
             break;
@@ -128,7 +130,7 @@ Traps::Result Traps::update(float dt, Structures& structures, std::vector<Enemy>
             for (Enemy& e : enemies) {
                 if (!e.isAlive() || e.stats().ethereal || !inside(e.position(), box, 0.0f)) continue;
                 e.slow(1.0f, e.type() == EnemyType::Brute ? kBearHoldBrute : kBearHold);
-                result.hits.push_back({&e, kBearDamage, false});
+                result.hits.push_back({&e, kBearDamage * power, false});
                 trap.timer = kBearRearm;
                 trap.active = true;
                 --trap.uses;

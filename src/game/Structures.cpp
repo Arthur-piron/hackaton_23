@@ -31,6 +31,8 @@ const StructureInfo kCatalog[] = {
      WHITE, 0, true},
     {"Projecteur", BuildCategory::Utilities, 1, 1, 3, 4, 120, 150.0f, kBlocksPlayer | kBlocksEnemies,
      "urban/detail-light-double.glb", WHITE, 0, true},
+    {"Établi", BuildCategory::Utilities, 2, 1, 10, 5, 100, 300.0f, kBlocksAll, "survival/workbench.glb", WHITE, 0,
+     false},
 };
 static_assert(sizeof(kCatalog) / sizeof(kCatalog[0]) == static_cast<size_t>(StructureKind::Count),
               "une entrée de catalogue par structure");
@@ -41,6 +43,12 @@ constexpr float kDoorOpenDistance = 1.5f;
 constexpr float kDoorSpeed = 4.0f;       // ouverture complète en 0,25 s
 constexpr float kDoorSink = 1.2f;        // la porte ouverte s'abaisse sous le sol
 constexpr float kFlatHeight = 0.03f;     // aperçu au sol des pièges sans modèle
+// Améliorations, par niveau (1 à 3) : PV ×2 puis ×3,5 ; dégâts +30 % puis +70 %.
+constexpr float kLevelHealth[] = {1.0f, 2.0f, 3.5f};
+constexpr float kLevelDamage[] = {1.0f, 1.3f, 1.7f};
+constexpr const char* kWorkbenchII = "survival/workbench-anvil.glb";
+constexpr float kPipSize = 6.0f;
+constexpr Color kPipColor = {255, 205, 90, 255};
 
 // Dégâts par seconde aux structures, dans l'ordre d'EnemyType (GAME.md §7.4).
 constexpr float kDamagePerSecond[] = {10.0f, 9.0f, 10.0f, 50.0f, 12.0f, 0.0f};
@@ -66,6 +74,11 @@ constexpr Color kBarRuined = {235, 70, 60, 255};
 const StructureInfo& Structures::info(StructureKind kind)
 {
     return kCatalog[static_cast<size_t>(kind)];
+}
+
+float Structures::damageMultiplier(int level)
+{
+    return kLevelDamage[std::clamp(level, 1, kMaxLevel) - 1];
 }
 
 float Structures::damagePerSecond(EnemyType type)
@@ -99,6 +112,9 @@ Structures::Structures(World& world)
         models_.push_back(&model);
         modelScales_.push_back(static_cast<float>(std::max(s.cellsX, s.cellsZ)) / std::max(longest, 0.01f));
     }
+    workbenchII_ = &world_.model(kWorkbenchII);
+    const BoundingBox b = GetModelBoundingBox(*workbenchII_);
+    workbenchIIScale_ = 2.0f / std::max(0.01f, std::max(b.max.x - b.min.x, b.max.z - b.min.z));
 }
 
 void Structures::clear()
@@ -126,6 +142,7 @@ int Structures::place(StructureKind kind, Vector3 center, bool rotated)
     item.trap = TrapState{};
     item.turret = TurretState{};
     item.trap.uses = info(kind).uses;
+    item.level = 1;
     const BoundingBox box = footprint(kind, center, rotated);
     if (item.blocker < 0) {
         item.blocker = world_.addBlocker(box, info(kind).mask);
@@ -166,7 +183,30 @@ bool Structures::exists(int id) const
 float Structures::healthFraction(int id) const
 {
     const Item& item = items_[static_cast<size_t>(id)];
-    return item.health / info(item.kind).health;
+    return item.health / maxHealth(id);
+}
+
+float Structures::maxHealth(int id) const
+{
+    const Item& item = items_[static_cast<size_t>(id)];
+    return info(item.kind).health * kLevelHealth[item.level - 1];
+}
+
+void Structures::upgrade(int id)
+{
+    if (!exists(id) || level(id) >= kMaxLevel) return;
+    Item& item = items_[static_cast<size_t>(id)];
+    const float before = maxHealth(id);
+    ++item.level;
+    item.health += maxHealth(id) - before;
+    // Pièges : utilisations ×2 au niveau 2, ×3 au niveau 3.
+    item.trap.uses += info(item.kind).uses;
+}
+
+const Model* Structures::modelOf(const Item& item) const
+{
+    if (item.kind == StructureKind::Workbench && item.level >= 2) return workbenchII_;
+    return models_[static_cast<size_t>(item.kind)];
 }
 
 BoundingBox Structures::bounds(int id) const
@@ -248,8 +288,11 @@ void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Col
         DrawPlane({center.x, kFlatHeight, center.z}, {b.max.x - b.min.x, b.max.z - b.min.z}, tint);
         return;
     }
-    const Model& model = *models_[static_cast<size_t>(kind)];
-    const float scale = modelScales_[static_cast<size_t>(kind)];
+    drawWith(*models_[static_cast<size_t>(kind)], modelScales_[static_cast<size_t>(kind)], center, rotated, tint, tilt);
+}
+
+void Structures::drawWith(const Model& model, float scale, Vector3 center, bool rotated, Color tint, float tilt) const
+{
     const float yaw = rotated ? 90.0f : 0.0f;
     // World::centeredPosition attend des multiplicateurs de kKenneyScale.
     const float relative = scale / kKenneyScale;
@@ -271,23 +314,31 @@ void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Col
 void Structures::draw() const
 {
     for (const Item& item : items_) {
-        if (!item.alive || !models_[static_cast<size_t>(item.kind)]) continue;
+        const Model* model = item.alive ? modelOf(item) : nullptr;
+        if (!model) continue;
         Vector3 center = item.center;
         center.y -= kDoorSink * item.open;
         if (item.shake > 0.0f) center.x += kShakeAmplitude * std::sin(item.shake * 120.0f);
-        const float fraction = item.health / info(item.kind).health;
+        const float fraction = healthFraction(static_cast<int>(&item - items_.data()));
         const Color tint = fraction < kCrackedFraction ? ColorTint(info(item.kind).tint, kCrackedTint) : info(item.kind).tint;
-        drawModel(item.kind, center, item.rotated, tint, fraction < kRuinedFraction ? kRuinTilt : 0.0f);
+        const float scale = model == workbenchII_ ? workbenchIIScale_ : modelScales_[static_cast<size_t>(item.kind)];
+        drawWith(*model, scale, center, item.rotated, tint, fraction < kRuinedFraction ? kRuinTilt : 0.0f);
     }
 }
 
 void Structures::drawHealthBars(const Camera3D& camera, Vector3 player) const
 {
     for (const Item& item : items_) {
-        if (!item.alive) continue;
-        const float fraction = item.health / info(item.kind).health;
-        if (fraction >= 1.0f || Vector3Distance(item.center, player) > kBarDistance) continue;
+        if (!item.alive || Vector3Distance(item.center, player) > kBarDistance) continue;
         const Vector2 at = GetWorldToScreen(Vector3Add(item.center, {0.0f, kBarLift, 0.0f}), camera);
+        // Niveau : un losange doré par niveau au-delà du premier.
+        for (int l = 1; l < item.level; ++l) {
+            const Vector2 pip = {at.x + (static_cast<float>(l) - static_cast<float>(item.level) * 0.5f) * kPipSize * 2.2f,
+                                 at.y - kPipSize * 1.6f};
+            DrawPoly(pip, 4, kPipSize, 0.0f, kPipColor);
+        }
+        const float fraction = healthFraction(static_cast<int>(&item - items_.data()));
+        if (fraction >= 1.0f) continue;
         const Rectangle back = {at.x - kBarWidth / 2.0f, at.y, kBarWidth, kBarHeight};
         DrawRectangleRec(back, kBarBack);
         // En ruine, la barre clignote en rouge.
