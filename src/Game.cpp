@@ -90,6 +90,10 @@ constexpr float kPowderRadius = 3.0f;
 constexpr float kPowderDamage = 60.0f;
 constexpr float kPowderPlayerDamage = 20.0f;
 constexpr Color kPowderColor = {255, 140, 50, 255};
+// Base : navigation et dégâts des morts aux structures (GAME.md §7.4).
+constexpr float kFlowFieldInterval = 0.25f;
+constexpr float kStructureReach = 0.35f;   // au-delà de son rayon, un mort frappe la structure
+constexpr float kStructureDestroyShake = 0.15f;
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -203,6 +207,7 @@ Game::Game(const Options& options)
     }
     crates_ = std::make_unique<Crates>(*world_);
     structures_ = std::make_unique<Structures>(*world_);
+    waves_->setFlowField(&flowField_);
     if (!map.altars.empty()) altar_ = std::make_unique<Altar>(map.altars.front());
     if (!map.mysteryBoxes.empty()) {
         mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
@@ -239,6 +244,8 @@ Game::Game(const Options& options)
             structures_->place(static_cast<StructureKind>(i),
                                Vector3Add(player_->position(), {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
         }
+        // Des morts derrière la palissade : ils la frappent pour passer (barre de PV sur la capture).
+        waves_->spawnRing(Vector3Add(player_->position(), {2.0f, 0.0f, 4.0f}), 0.6f, 3, EnemyType::Walker);
         musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
     } else {
         musicDirector_.menu(audio_);
@@ -330,6 +337,7 @@ void Game::startNewGame()
     crates_->clear();
     structures_->clear();
     buildMode_.reset();
+    flowFieldTimer_ = 0.0f;
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
@@ -855,6 +863,17 @@ void Game::breakCrate(const Crates::Broken& crate)
 bool Game::updateBase(float dt, const Controls& c)
 {
     structures_->update(dt, player_->position());
+    flowFieldTimer_ -= dt;
+    if (flowFieldTimer_ <= 0.0f) {
+        flowFieldTimer_ = kFlowFieldInterval;
+        flowField_.rebuild(*world_, *zones_, *structures_, player_->position());
+    }
+    // Un mort au contact d'une structure qui lui barre la route la frappe.
+    for (const Enemy& e : waves_->enemies()) {
+        if (!e.isAlive() || e.stats().ethereal) continue;
+        const int id = structures_->blockingNear(e.position(), e.radius() + kStructureReach);
+        if (id >= 0) structures_->damage(id, Structures::damagePerSecond(e.type()) * dt, events_);
+    }
     if (player_->isDead()) {
         buildMode_.reset();
         return false;
@@ -1139,6 +1158,15 @@ void Game::handleEvents()
             audio_.play("pickup", 0.6f, 0.1f);
             particles_->debris(ev.position, kCrateWoodColor, kCrateChunks / 2);
             break;
+        case EventType::StructureDamaged:
+            audio_.playAt("hit_wood", ev.position, 0.5f, 0.2f);
+            particles_->debris(Vector3Add(ev.position, {0.0f, 0.6f, 0.0f}), kCrateWoodColor, 5);
+            break;
+        case EventType::StructureDestroyed:
+            audio_.playAt("hit_heavy", ev.position, 0.9f, 0.1f);
+            particles_->debris(ev.position, kCrateWoodColor, 20);
+            cameraRig_.shake(kStructureDestroyShake);
+            break;
         case EventType::ResourcePicked:
             audio_.play("pickup", 0.35f, 0.2f);
             hud_.pulseResources();
@@ -1256,6 +1284,7 @@ void Game::draw() const
         }
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Playing) {
+            structures_->drawHealthBars(cameraRig_.camera(), player_->position());
             buildMode_.drawPrompt(cameraRig_.camera());
             buildBar_.draw(buildMode_, economy_);
         }

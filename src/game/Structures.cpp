@@ -24,11 +24,36 @@ constexpr float kThickness = 0.5f;       // épaisseur des murs 2×1, plus fine 
 constexpr float kDoorOpenDistance = 1.5f;
 constexpr float kDoorSpeed = 4.0f;       // ouverture complète en 0,25 s
 constexpr float kDoorSink = 1.2f;        // la porte ouverte s'abaisse sous le sol
+
+// Dégâts par seconde aux structures, dans l'ordre d'EnemyType (GAME.md §7.4).
+constexpr float kDamagePerSecond[] = {10.0f, 9.0f, 10.0f, 50.0f, 12.0f, 0.0f};
+static_assert(sizeof(kDamagePerSecond) / sizeof(kDamagePerSecond[0]) == static_cast<size_t>(EnemyType::Count),
+              "des dégâts par type d'ennemi");
+
+constexpr float kHitEventInterval = 0.5f;
+constexpr float kShakeTime = 0.1f;
+constexpr float kShakeAmplitude = 0.04f;
+constexpr float kCrackedFraction = 0.66f;
+constexpr float kRuinedFraction = 0.33f;
+constexpr Color kCrackedTint = {204, 204, 204, 255};
+constexpr float kRuinTilt = 6.0f;          // degrés
+constexpr float kBarDistance = 12.0f;
+constexpr float kBarWidth = 46.0f;
+constexpr float kBarHeight = 6.0f;
+constexpr float kBarLift = 1.9f;
+constexpr Color kBarBack = {20, 20, 25, 200};
+constexpr Color kBarHealthy = {120, 220, 120, 255};
+constexpr Color kBarRuined = {235, 70, 60, 255};
 }
 
 const StructureInfo& Structures::info(StructureKind kind)
 {
     return kCatalog[static_cast<size_t>(kind)];
+}
+
+float Structures::damagePerSecond(EnemyType type)
+{
+    return kDamagePerSecond[static_cast<size_t>(type)];
 }
 
 BoundingBox Structures::footprint(StructureKind kind, Vector3 center, bool rotated)
@@ -125,16 +150,59 @@ BoundingBox Structures::bounds(int id) const
     return footprint(item.kind, item.center, item.rotated);
 }
 
+std::vector<int> Structures::ids() const
+{
+    std::vector<int> list;
+    for (size_t i = 0; i < items_.size(); ++i) {
+        if (items_[i].alive) list.push_back(static_cast<int>(i));
+    }
+    return list;
+}
+
+int Structures::blockingNear(Vector3 point, float reach) const
+{
+    for (size_t i = 0; i < items_.size(); ++i) {
+        const Item& item = items_[i];
+        if (!item.alive || (info(item.kind).mask & kBlocksEnemies) == 0) continue;
+        const BoundingBox b = bounds(static_cast<int>(i));
+        const float dx = point.x - std::clamp(point.x, b.min.x, b.max.x);
+        const float dz = point.z - std::clamp(point.z, b.min.z, b.max.z);
+        if (dx * dx + dz * dz <= reach * reach) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+bool Structures::damage(int id, float amount, EventQueue& events)
+{
+    if (!exists(id) || amount <= 0.0f) return false;
+    Item& item = items_[static_cast<size_t>(id)];
+    item.health -= amount;
+    item.shake = kShakeTime;
+    if (item.health <= 0.0f) {
+        remove(id);
+        events.push_back({EventType::StructureDestroyed, item.center, static_cast<float>(item.kind)});
+        return true;
+    }
+    if (item.hitCooldown <= 0.0f) {
+        item.hitCooldown = kHitEventInterval;
+        events.push_back({EventType::StructureDamaged, item.center, static_cast<float>(item.kind)});
+    }
+    return false;
+}
+
 void Structures::update(float dt, Vector3 player)
 {
     for (Item& item : items_) {
-        if (!item.alive || item.kind != StructureKind::Door) continue;
+        if (!item.alive) continue;
+        item.hitCooldown = std::max(0.0f, item.hitCooldown - dt);
+        item.shake = std::max(0.0f, item.shake - dt);
+        if (item.kind != StructureKind::Door) continue;
         const bool near = Vector2Distance({player.x, player.z}, {item.center.x, item.center.z}) < kDoorOpenDistance;
         item.open = std::clamp(item.open + (near ? kDoorSpeed : -kDoorSpeed) * dt, 0.0f, 1.0f);
     }
 }
 
-void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Color tint) const
+void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Color tint, float tilt) const
 {
     const Model& model = *models_[static_cast<size_t>(kind)];
     const float scale = modelScales_[static_cast<size_t>(kind)];
@@ -142,7 +210,18 @@ void Structures::drawModel(StructureKind kind, Vector3 center, bool rotated, Col
     // World::centeredPosition attend des multiplicateurs de kKenneyScale.
     const float relative = scale / kKenneyScale;
     const Vector3 at = World::centeredPosition(model, center, yaw, {relative, relative, relative});
-    DrawModelEx(model, at, {0.0f, 1.0f, 0.0f}, yaw, {scale, scale, scale}, tint);
+    // Une structure en ruine penche vers l'avant.
+    const Matrix transform = MatrixMultiply(
+        MatrixMultiply(MatrixMultiply(MatrixScale(scale, scale, scale), MatrixRotateY(yaw * DEG2RAD)),
+                       MatrixRotateX(tilt * DEG2RAD)),
+        MatrixTranslate(at.x, at.y, at.z));
+    for (int m = 0; m < model.meshCount; ++m) {
+        Material material = model.materials[model.meshMaterial[m]];
+        const Color base = material.maps[MATERIAL_MAP_DIFFUSE].color;
+        material.maps[MATERIAL_MAP_DIFFUSE].color = ColorTint(base, tint);
+        DrawMesh(model.meshes[m], material, transform);
+        material.maps[MATERIAL_MAP_DIFFUSE].color = base;
+    }
 }
 
 void Structures::draw() const
@@ -151,6 +230,26 @@ void Structures::draw() const
         if (!item.alive) continue;
         Vector3 center = item.center;
         center.y -= kDoorSink * item.open;
-        drawModel(item.kind, center, item.rotated, WHITE);
+        if (item.shake > 0.0f) center.x += kShakeAmplitude * std::sin(item.shake * 120.0f);
+        const float fraction = item.health / info(item.kind).health;
+        const Color tint = fraction < kCrackedFraction ? kCrackedTint : WHITE;
+        drawModel(item.kind, center, item.rotated, tint, fraction < kRuinedFraction ? kRuinTilt : 0.0f);
+    }
+}
+
+void Structures::drawHealthBars(const Camera3D& camera, Vector3 player) const
+{
+    for (const Item& item : items_) {
+        if (!item.alive) continue;
+        const float fraction = item.health / info(item.kind).health;
+        if (fraction >= 1.0f || Vector3Distance(item.center, player) > kBarDistance) continue;
+        const Vector2 at = GetWorldToScreen(Vector3Add(item.center, {0.0f, kBarLift, 0.0f}), camera);
+        const Rectangle back = {at.x - kBarWidth / 2.0f, at.y, kBarWidth, kBarHeight};
+        DrawRectangleRec(back, kBarBack);
+        // En ruine, la barre clignote en rouge.
+        const bool ruined = fraction < kRuinedFraction;
+        const bool blink = ruined && std::fmod(static_cast<float>(GetTime()), 0.4f) < 0.2f;
+        DrawRectangleRec({back.x + 1.0f, back.y + 1.0f, (kBarWidth - 2.0f) * fraction, kBarHeight - 2.0f},
+                         ruined ? (blink ? WHITE : kBarRuined) : kBarHealthy);
     }
 }
