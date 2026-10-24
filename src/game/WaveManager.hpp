@@ -9,9 +9,10 @@
 #include <vector>
 
 class World;
+class Zones;
 
-// Enchaîne les vagues : apparition des morts aux bords du terrain, difficulté
-// croissante, pause entre deux vagues.
+// Enchaîne les vagues : apparition des morts aux entrées des zones ouvertes,
+// difficulté croissante, pause entre deux vagues.
 class WaveManager {
 public:
     enum class Phase { Intermission, Fighting };
@@ -24,7 +25,7 @@ public:
 
     void reset();
     // Renvoie les dégâts infligés au joueur pendant cette image.
-    float update(float dt, Vector3 playerPosition, const World& world, EventQueue& events);
+    float update(float dt, Vector3 playerPosition, const World& world, const Zones& zones, EventQueue& events);
     void draw() const;
     // Passe immédiatement à la vague suivante pendant la pause.
     void skipIntermission();
@@ -42,8 +43,10 @@ public:
 private:
     void startWave(EventQueue& events);
     EnemyType pickType() const;
-    Vector3 pickSpawnPoint(Vector3 playerPosition) const;
+    Vector3 pickSpawnPoint(Vector3 playerPosition, const World& world, const Zones& zones) const;
     void separate(float dt);
+    // Collisions avec le décor, et contournement quand un mort bute de face sur un obstacle.
+    void collide(float dt, Vector3 playerPosition, const World& world, const Zones& zones);
 
     std::array<std::shared_ptr<AnimatedModel>, static_cast<size_t>(EnemyType::Count)> models_;
     std::vector<Enemy> enemies_;

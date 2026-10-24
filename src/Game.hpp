@@ -13,6 +13,7 @@
 #include "game/WaveManager.hpp"
 #include "game/Weapon.hpp"
 #include "game/World.hpp"
+#include "game/Zones.hpp"
 #include "ui/Hud.hpp"
 
 #include <memory>
@@ -47,6 +48,7 @@ private:
         bool reload = false;
         int selectWeapon = -1;
         int cycleWeapon = 0;
+        bool interact = false;
     };
 
     void loadAudio();
@@ -60,7 +62,6 @@ private:
     // Fait progresser le combo et lâche l'or et l'XP d'un ennemi qui vient de mourir.
     void rewardKill(const Enemy& enemy);
     // Balles arrêtées par les murs d'enceinte (étincelles).
-    void resolveWallImpacts();
     void handleEvents();
     void updateFootsteps(float dt);
 
@@ -77,9 +78,10 @@ private:
     int frameCount_ = 0;
     State state_ = State::Menu;
 
-    World world_;
     Audio audio_;
     // Les ressources GPU doivent être créées après InitWindow et libérées avant CloseWindow.
+    std::unique_ptr<World> world_;
+    std::unique_ptr<Zones> zones_; // référence world_ : détruit avant lui
     std::unique_ptr<AnimatedModel> keeperModel_;
     std::unique_ptr<Player> player_;
     std::unique_ptr<WaveManager> waves_;

@@ -1,10 +1,8 @@
 #include "game/Projectile.hpp"
 
-#include "game/World.hpp"
 #include "raymath.h"
 
 #include <algorithm>
-#include <cmath>
 
 namespace {
 constexpr float kTracerLength = 0.9f;
@@ -18,8 +16,7 @@ void ProjectileSystem::update(float dt)
         p.previous = p.position;
         p.position = Vector3Add(p.position, Vector3Scale(p.velocity, dt));
         p.life -= dt;
-        const float limit = World::kHalfSize + 2.0f;
-        if (p.life <= 0.0f || std::fabs(p.position.x) > limit || std::fabs(p.position.z) > limit) p.alive = false;
+        if (p.life <= 0.0f) p.alive = false;
     }
     projectiles_.erase(std::remove_if(projectiles_.begin(), projectiles_.end(),
                                       [](const Projectile& p) { return !p.alive; }),

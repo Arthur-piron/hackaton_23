@@ -2,6 +2,7 @@
 
 #include "core/AssetPath.hpp"
 #include "game/World.hpp"
+#include "game/Zones.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -12,10 +13,14 @@
 namespace {
 constexpr float kFirstIntermission = 4.0f;
 constexpr float kIntermission = 15.0f;
-constexpr float kSpawnMargin = 1.5f;
-// Distance minimale entre un point d'apparition et le joueur.
+// Distance minimale souhaitée entre un point d'apparition et le joueur.
 constexpr float kMinSpawnDistance = 14.0f;
+constexpr float kSpawnJitter = 0.8f;
+constexpr float kSpawnClearance = 0.6f;
 constexpr float kSeparationStrength = 4.0f;
+// Contournement : un mort qui bute de face (cosinus) longe l'obstacle à cette fraction de sa vitesse.
+constexpr float kHeadOnThreshold = 0.5f;
+constexpr float kDetourSpeed = 0.8f;
 
 int waveQuota(int wave)
 {
@@ -103,23 +108,47 @@ EnemyType WaveManager::pickType() const
     return EnemyType::Walker;
 }
 
-Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition) const
+Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition, const World& world, const Zones& zones) const
 {
-    const float edge = World::kHalfSize - kSpawnMargin;
-    Vector3 best = {edge, 0.0f, edge};
-    for (int attempt = 0; attempt < 8; ++attempt) {
-        const float along = static_cast<float>(GetRandomValue(-1000, 1000)) / 1000.0f * edge;
-        Vector3 p;
-        switch (GetRandomValue(0, 3)) {
-        case 0: p = {along, 0.0f, -edge}; break;
-        case 1: p = {along, 0.0f, edge}; break;
-        case 2: p = {-edge, 0.0f, along}; break;
-        default: p = {edge, 0.0f, along}; break;
-        }
-        best = p;
-        if (Vector3Distance(p, playerPosition) >= kMinSpawnDistance) break;
+    // Au hasard parmi les entrées assez loin du joueur ; à défaut, la plus éloignée.
+    const std::vector<Vector3> points = zones.openSpawnPoints();
+    if (points.empty()) return world.playerSpawn();
+    std::vector<Vector3> far;
+    Vector3 farthest = points.front();
+    for (const Vector3& p : points) {
+        if (Vector3Distance(p, playerPosition) >= kMinSpawnDistance) far.push_back(p);
+        if (Vector3Distance(p, playerPosition) > Vector3Distance(farthest, playerPosition)) farthest = p;
     }
-    return best;
+    Vector3 spawn = far.empty() ? farthest : far[static_cast<size_t>(GetRandomValue(0, static_cast<int>(far.size()) - 1))];
+    // Léger décalage : les morts d'une même entrée ne sortent pas tous du même point.
+    spawn.x += static_cast<float>(GetRandomValue(-100, 100)) / 100.0f * kSpawnJitter;
+    spawn.z += static_cast<float>(GetRandomValue(-100, 100)) / 100.0f * kSpawnJitter;
+    return world.resolveCircle(spawn, kSpawnClearance);
+}
+
+void WaveManager::collide(float dt, Vector3 playerPosition, const World& world, const Zones& zones)
+{
+    for (Enemy& e : enemies_) {
+        if (!e.isAlive()) continue;
+        const Vector3 position = e.position();
+        Vector3 resolved = world.resolveCircle(position, e.radius());
+        const Vector3 correction = Vector3Subtract(resolved, position);
+        const float pushed = Vector3Length(correction);
+        if (pushed > 1e-4f) {
+            // Le décor l'a repoussé : s'il fonce droit dans l'obstacle, il le longe vers sa cible.
+            const Vector3 normal = Vector3Scale(correction, 1.0f / pushed);
+            const Vector3 goal = zones.steer(position, playerPosition);
+            const Vector3 toGoal = Vector3Normalize({goal.x - position.x, 0.0f, goal.z - position.z});
+            if (Vector3DotProduct(normal, toGoal) < -kHeadOnThreshold) {
+                Vector3 tangent = {-normal.z, 0.0f, normal.x};
+                const float side = Vector3DotProduct(tangent, toGoal);
+                if (side < 0.0f || (std::fabs(side) < 1e-3f && (e.id() % 2) == 0)) tangent = Vector3Negate(tangent);
+                const float step = e.stats().speed * kDetourSpeed * dt;
+                resolved = world.resolveCircle(Vector3Add(resolved, Vector3Scale(tangent, step)), e.radius());
+            }
+        }
+        e.push(Vector3Subtract(resolved, position));
+    }
 }
 
 void WaveManager::separate(float dt)
@@ -145,7 +174,8 @@ void WaveManager::separate(float dt)
     }
 }
 
-float WaveManager::update(float dt, Vector3 playerPosition, const World& world, EventQueue& events)
+float WaveManager::update(float dt, Vector3 playerPosition, const World& world, const Zones& zones,
+                          EventQueue& events)
 {
     if (phase_ == Phase::Intermission && !cleared_) {
         timer_ -= dt;
@@ -159,19 +189,17 @@ float WaveManager::update(float dt, Vector3 playerPosition, const World& world, 
         if (spawnTimer_ <= 0.0f && alive < maxAlive(wave_)) {
             spawnTimer_ = spawnInterval(wave_);
             const EnemyType type = pickType();
-            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)], pickSpawnPoint(playerPosition));
+            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
+                                  pickSpawnPoint(playerPosition, world, zones));
             --toSpawn_;
         }
     }
 
     float damage = 0.0f;
-    for (Enemy& e : enemies_) damage += e.update(dt, playerPosition, events);
+    // Chaque mort marche vers le joueur, ou vers la grille qui mène à sa zone.
+    for (Enemy& e : enemies_) damage += e.update(dt, zones.steer(e.position(), playerPosition), events);
     separate(dt);
-    for (Enemy& e : enemies_) {
-        if (!e.isAlive()) continue;
-        const Vector3 clamped = world.clampToBounds(e.position(), e.radius());
-        e.push(Vector3Subtract(clamped, e.position()));
-    }
+    collide(dt, playerPosition, world, zones);
     enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [](const Enemy& e) { return e.isRemovable(); }),
                    enemies_.end());
 
