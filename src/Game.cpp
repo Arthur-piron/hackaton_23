@@ -367,6 +367,7 @@ void Game::startNewGame()
     cameraRig_.snapTo(player_->position());
     score_ = 0;
     kills_ = 0;
+    defenseKills_ = 0;
     hitStop_ = 0.0f;
     bonesEarned_ = 0;
 }
@@ -918,10 +919,11 @@ bool Game::updateBase(float dt, const Controls& c)
     const Traps::Result trapped = traps_.update(dt, *structures_, waves_->enemies(), events_);
     for (const Traps::Hit& hit : trapped.hits) {
         if (hit.ignite && hit.enemy->isAlive()) cardEffects_.ignite(*hit.enemy);
-        damageEnemy(*hit.enemy, hit.damage, {0.0f, 0.0f, 0.0f}, 0.0f, hit.ignite ? HitKind::Burn : HitKind::Normal);
+        damageEnemy(*hit.enemy, hit.damage, {0.0f, 0.0f, 0.0f}, 0.0f, hit.ignite ? HitKind::Burn : HitKind::Normal,
+                    true);
     }
     for (const Traps::Blast& blast : trapped.blasts) {
-        explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor);
+        explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor, true);
     }
     for (const Turrets::Hit& hit : turrets_->update(dt, *structures_, waves_->enemies(), *world_, events_)) {
         damageEnemy(*hit.enemy, hit.damage, hit.direction, kTurretKnockback, HitKind::Normal, true);
@@ -947,13 +949,14 @@ void Game::drawBase() const
     buildMode_.drawWorld(*structures_);
 }
 
-void Game::explode(Vector3 center, float radius, float damage, float knockback, float playerDamage, Color color)
+void Game::explode(Vector3 center, float radius, float damage, float knockback, float playerDamage, Color color,
+                   bool byDefense)
 {
     cardEffects_.addBlast(Vector3Add(center, {0.0f, 1.0f, 0.0f}), radius, color);
     events_.push_back({EventType::Explosion, center, radius});
     for (Enemy& e : waves_->enemies()) {
         if (!e.isAlive() || flatDistance(e.position(), center) > radius + e.radius()) continue;
-        damageEnemy(e, damage, flatDirection(center, e.position()), knockback);
+        damageEnemy(e, damage, flatDirection(center, e.position()), knockback, HitKind::Normal, byDefense);
     }
     if (playerDamage > 0.0f && !player_->isDead() && flatDistance(player_->position(), center) <= radius) {
         hurtPlayer(playerDamage, center);
@@ -1069,6 +1072,7 @@ void Game::rewardKill(const Enemy& enemy, bool byDefense)
     const CardModifiers& m = cards_.modifiers();
     const int multiplierBefore = economy_.comboMultiplier();
     const Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
+    if (byDefense) ++defenseKills_;
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
     const Economy::Salvage salvage = Economy::rollSalvage(enemy.type());
@@ -1466,14 +1470,18 @@ void Game::drawEndScreen(const char* title, Color color) const
     const char* stats = TextFormat("%s   -   vague %d   -   %d morts   -   score %d", gameModeRules(mode_).name,
                                    waves_->wave(), kills_, score_);
     fonts::drawText(stats, (w - fonts::measureText(stats, 26)) / 2, h / 3 + 110, 26, RAYWHITE);
+    // Part des morts dues aux défenses (objectif d'équilibrage : au plus 35 %).
+    const int defenseShare = kills_ > 0 ? defenseKills_ * 100 / kills_ : 0;
+    const char* defenses = TextFormat("Tués par tes défenses : %d (%d %%)", defenseKills_, defenseShare);
+    fonts::drawText(defenses, (w - fonts::measureText(defenses, 20)) / 2, h / 3 + 146, 20, LIGHTGRAY);
     const char* bones = TextFormat("+%d ossements   (total %d, record vague %d)", bonesEarned_, progression_->bones(),
                                    progression_->bestWave());
-    fonts::drawText(bones, (w - fonts::measureText(bones, 22)) / 2, h / 3 + 150, 22, kBoneColor);
+    fonts::drawText(bones, (w - fonts::measureText(bones, 22)) / 2, h / 3 + 178, 22, kBoneColor);
     const int rank = progression_->lastRank();
     if (rank >= 0) {
         const char* place = rank == 0 ? "NOUVEAU RECORD !" : TextFormat("%de au tableau des scores", rank + 1);
-        fonts::drawText(place, (w - fonts::measureText(place, 24)) / 2, h / 3 + 186, 24, kRecordColor);
+        fonts::drawText(place, (w - fonts::measureText(place, 24)) / 2, h / 3 + 212, 24, kRecordColor);
     }
     const char* hint = "Entrée : rejouer   Échap : menu";
-    fonts::drawText(hint, (w - fonts::measureText(hint, 22)) / 2, h / 3 + 236, 22, LIGHTGRAY);
+    fonts::drawText(hint, (w - fonts::measureText(hint, 22)) / 2, h / 3 + 256, 22, LIGHTGRAY);
 }
