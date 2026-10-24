@@ -25,6 +25,8 @@ constexpr float kBottomlessChance = 0.10f;
 constexpr float kNecroticChance = 0.20f;
 constexpr float kCriticalChance = 0.10f;
 constexpr float kLeadRainSpread = 5.0f;
+constexpr float kLongBatteryCapacity = 0.30f;
+constexpr float kUvLampDamage = 15.0f;
 
 using C = CardId;
 using R = CardRarity;
@@ -42,7 +44,7 @@ const std::vector<CardInfo>& buildCatalog()
         {C::Miser, "Avare", "OR", "Or gagne +15 %", R::Common, K::Fortune, 3, true, {}},
         {C::Magnet, "Aimant", "AIM", "Rayon d'aimantation de l'or et de l'XP +50 %", R::Common, K::Fortune, 2, true,
          {}},
-        {C::LongBattery, "Pile longue duree", "BAT", "Batterie de la lampe +30 %", R::Common, K::Light, 3, false, {}},
+        {C::LongBattery, "Pile longue duree", "BAT", "Batterie de la lampe +30 %", R::Common, K::Light, 3, true, {}},
         {C::SecondWind, "Second souffle", "END", "Endurance +30 %, recuperation +20 %", R::Common, K::Mobility, 2,
          true, {}},
         {C::Incendiary, "Balles incendiaires", "FEU", "Les balles enflamment : 6 degats/s pendant 3 s", R::Rare,
@@ -50,7 +52,7 @@ const std::vector<CardInfo>& buildCatalog()
         {C::Ricochet, "Ricochet", "RIC", "Une balle qui tue rebondit vers l'ennemi le plus proche (8 m)", R::Rare,
          K::Weapon, 2, true, {}},
         {C::Piercing, "Perforation", "PER", "Les balles traversent +1 ennemi", R::Rare, K::Weapon, 2, true, {}},
-        {C::UvLamp, "Lampe UV", "UV", "Le cone de lumiere inflige 15 degats/s", R::Rare, K::Light, 2, false, {}},
+        {C::UvLamp, "Lampe UV", "UV", "Le cone de lumiere inflige 15 degats/s", R::Rare, K::Light, 2, true, {}},
         {C::Vampirism, "Vampirisme", "VAM", "Chaque mort rend 1 % de la vie max", R::Rare, K::Occult, 3, true, {}},
         {C::BottomlessMag, "Chargeur sans fond", "INF", "10 % de chances qu'un tir ne consomme pas de balle",
          R::Rare, K::Weapon, 3, true, {}},
@@ -58,7 +60,7 @@ const std::vector<CardInfo>& buildCatalog()
          R::Rare, K::Light, 2, false, {}},
         {C::NecroticBlast, "Explosion necrotique", "NEC", "20 % des morts explosent (2,5 m, 40 degats)", R::Rare,
          K::Occult, 2, true, {}},
-        {C::Frost, "Gel", "GEL", "Les balles ralentissent de 30 % pendant 1,5 s", R::Rare, K::Weapon, 1, false, {}},
+        {C::Frost, "Gel", "GEL", "Les balles ralentissent de 30 % pendant 1,5 s", R::Rare, K::Weapon, 1, true, {}},
         {C::CriticalHit, "Coup critique", "CRT", "10 % de chances d'infliger x3 degats", R::Rare, K::Weapon, 3, true,
          {}},
         {C::LastStand, "Dernier rempart", "REM",
@@ -171,5 +173,8 @@ void Cards::recompute()
     m.extraSpreadDegrees = m.doubleShot ? kLeadRainSpread : 0.0f;
     m.reaper = has(C::Reaper);
     m.deadMansFortune = has(C::DeadMansFortune);
+    m.frost = has(C::Frost);
+    m.batteryMultiplier = 1.0f + kLongBatteryCapacity * r(C::LongBattery);
+    m.lightBonusDamage = kUvLampDamage * r(C::UvLamp);
     modifiers_ = m;
 }
