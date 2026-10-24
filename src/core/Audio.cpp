@@ -30,8 +30,10 @@ Audio::~Audio()
             }
         }
     }
-    unloadMusic(music_);
-    unloadMusic(fadingMusic_);
+    for (LoopChannel& channel : channels_) {
+        unloadMusic(channel.current);
+        unloadMusic(channel.fading);
+    }
 }
 
 void Audio::loadGroup(const std::string& group, const std::vector<std::string>& files, int voices)
@@ -86,35 +88,43 @@ void Audio::playAt(const std::string& group, Vector3 position, float volume, flo
     PlaySound(*sound);
 }
 
-void Audio::playMusic(const std::string& file, float volume)
+void Audio::playLoop(Channel channel, const std::string& file, float volume)
 {
-    if (!IsAudioDeviceReady() || file == musicFile_) return;
-    unloadMusic(fadingMusic_);
-    fadingMusic_ = music_;
-    music_ = LoadMusicStream(assetPath("music/" + file).c_str());
-    musicFile_ = file;
-    musicVolume_ = volume;
-    musicFade_ = 0.0f;
-    if (IsMusicValid(music_)) {
-        music_.looping = true;
-        SetMusicVolume(music_, 0.0f);
-        PlayMusicStream(music_);
+    LoopChannel& c = channels_[static_cast<size_t>(channel)];
+    if (!IsAudioDeviceReady()) return;
+    if (file == c.file) {
+        c.volume = volume; // même piste : seul le volume change
+        return;
+    }
+    unloadMusic(c.fading);
+    c.fading = c.current;
+    c.fadingVolume = c.volume * c.fade;
+    c.current = file.empty() ? Music{} : LoadMusicStream(assetPath("music/" + file).c_str());
+    c.file = file;
+    c.volume = volume;
+    c.fade = 0.0f;
+    if (IsMusicValid(c.current)) {
+        c.current.looping = true;
+        SetMusicVolume(c.current, 0.0f);
+        PlayMusicStream(c.current);
     }
 }
 
 void Audio::update(float dt)
 {
-    musicFade_ = std::min(1.0f, musicFade_ + dt / kMusicFadeSeconds);
-    if (IsMusicValid(music_)) {
-        SetMusicVolume(music_, musicVolume_ * musicFade_);
-        UpdateMusicStream(music_);
-    }
-    if (IsMusicValid(fadingMusic_)) {
-        if (musicFade_ >= 1.0f) {
-            unloadMusic(fadingMusic_);
-        } else {
-            SetMusicVolume(fadingMusic_, musicVolume_ * (1.0f - musicFade_));
-            UpdateMusicStream(fadingMusic_);
+    for (LoopChannel& c : channels_) {
+        c.fade = std::min(1.0f, c.fade + dt / kMusicFadeSeconds);
+        if (IsMusicValid(c.current)) {
+            SetMusicVolume(c.current, c.volume * c.fade);
+            UpdateMusicStream(c.current);
+        }
+        if (IsMusicValid(c.fading)) {
+            if (c.fade >= 1.0f) {
+                unloadMusic(c.fading);
+            } else {
+                SetMusicVolume(c.fading, c.fadingVolume * (1.0f - c.fade));
+                UpdateMusicStream(c.fading);
+            }
         }
     }
 }

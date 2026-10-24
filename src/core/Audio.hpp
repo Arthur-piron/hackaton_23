@@ -25,11 +25,26 @@ public:
     void playAt(const std::string& group, Vector3 position, float volume = 1.0f, float pitchVariation = 0.08f);
     void setListener(Vector3 position) { listener_ = position; }
 
-    // Musique en boucle (relative à assets/music/), avec fondu entre deux pistes.
-    void playMusic(const std::string& file, float volume = 0.5f);
+    // Deux pistes en boucle (relatives à assets/music/) jouées ensemble : la musique et une
+    // ambiance (grillons, vent) en dessous. Changer de piste fait un fondu enchaîné ;
+    // un nom vide éteint le canal en fondu.
+    enum class Channel { Music, Ambience, Count };
+    void playMusic(const std::string& file, float volume = 0.5f) { playLoop(Channel::Music, file, volume); }
+    void playAmbience(const std::string& file, float volume = 0.3f) { playLoop(Channel::Ambience, file, volume); }
+    void playLoop(Channel channel, const std::string& file, float volume);
     void update(float dt);
 
 private:
+    // Une piste qui entre en fondu pendant que la précédente sort.
+    struct LoopChannel {
+        Music current{};
+        Music fading{};
+        std::string file;
+        float volume = 0.5f;
+        float fadingVolume = 0.0f; // volume de départ de la piste sortante
+        float fade = 1.0f;         // 0 → 1 : entrée de current, sortie de fading
+    };
+
     struct Voice {
         Sound sound{};
         bool alias = false;
@@ -45,9 +60,5 @@ private:
     std::unordered_map<std::string, Group> groups_;
     Vector3 listener_ = {0.0f, 0.0f, 0.0f};
 
-    Music music_{};
-    Music fadingMusic_{};
-    std::string musicFile_;
-    float musicVolume_ = 0.5f;
-    float musicFade_ = 1.0f; // 0 → 1 : fondu d'entrée de music_, de sortie de fadingMusic_
+    LoopChannel channels_[static_cast<size_t>(Channel::Count)];
 };

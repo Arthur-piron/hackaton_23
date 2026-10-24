@@ -10,6 +10,7 @@
 #include "game/Cards.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
+#include "game/MusicDirector.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Projectile.hpp"
@@ -103,6 +104,7 @@ private:
     State state_ = State::Menu;
 
     Audio audio_;
+    MusicDirector musicDirector_;
     // Les ressources GPU doivent être créées après InitWindow et libérées avant CloseWindow.
     std::unique_ptr<World> world_;
     std::unique_ptr<Zones> zones_; // référence world_ : détruit avant lui
