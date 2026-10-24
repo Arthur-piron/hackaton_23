@@ -80,6 +80,7 @@ constexpr Color kBoneColor = {235, 225, 195, 255};
 constexpr Color kRecordColor = {255, 205, 90, 255};
 constexpr int kArmoryWeapon = 1; // talent Arsenal : fusil à pompe (indice dans Arsenal::catalog)
 constexpr float kGateShake = 0.3f;
+constexpr Color kAltarHealColor = {170, 225, 255, 255};
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -191,6 +192,7 @@ Game::Game(const Options& options)
         lighting_->apply(merchantModel_->model());
         merchant_ = std::make_unique<Merchant>(*merchantModel_, map.merchants.front());
     }
+    if (!map.altars.empty()) altar_ = std::make_unique<Altar>(map.altars.front());
     if (!map.mysteryBoxes.empty()) {
         mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
         mysteryBox_->applyLighting(*lighting_);
@@ -305,6 +307,7 @@ void Game::startNewGame()
     player_->reset(world_->playerSpawn());
     zones_->reset();
     if (mysteryBox_) mysteryBox_->reset();
+    if (altar_) altar_->reset();
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
@@ -464,6 +467,7 @@ void Game::updateLighting(float dt)
     lighting_->addLight(fill);
     for (const PointLight& lantern : flyingLanterns_.lights()) lighting_->addLight(lantern);
     if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
+    if (altar_) lighting_->addLight(altar_->light());
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -516,12 +520,15 @@ void Game::updatePlaying(float dt)
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
         } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
             takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
+        } else if (altar_ && altar_->inReach(player_->position())) {
+            altar_->tryUse(player_->position(), player_->health() < player_->maxHealth(), *zones_, events_);
         } else {
             zones_->tryOpenNearest(player_->position(), economy_, events_);
         }
     }
     zones_->update(dt);
     if (mysteryBox_) mysteryBox_->update(dt, *zones_, events_);
+    if (altar_) altar_->update(dt);
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
@@ -953,6 +960,7 @@ void Game::handleEvents()
             audio_.play("wave_bell", 0.8f, 0.0f);
             hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
             lastStandReady_ = true;
+            if (altar_) altar_->recharge();
             break;
         case EventType::WaveCleared:
             audio_.play("ui_confirm", 0.7f, 0.0f);
@@ -1026,6 +1034,15 @@ void Game::handleEvents()
                 audio_.playAt("ui_confirm", ev.position, 0.8f, 0.1f);
             }
             break;
+        case EventType::AltarUsed: {
+            const float healed = player_->maxHealth() - player_->health();
+            player_->heal(healed);
+            audio_.playAt("wave_bell", ev.position, 0.7f, 0.0f);
+            audio_.play("pickup", 0.8f, 0.0f);
+            hud_.addDamageNumber(Vector3Add(player_->position(), {0.0f, 2.0f, 0.0f}), healed, kAltarHealColor);
+            hud_.announce("PRIÈRE EXAUCÉE", "Ta vie est restaurée", kAltarHealColor);
+            break;
+        }
         case EventType::MysteryBoxMoved:
             audio_.playAt("hit_heavy", ev.position, 0.9f, 0.0f);
             cameraRig_.shake(kGateShake);
@@ -1112,6 +1129,10 @@ void Game::draw() const
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
             if (merchant_) merchant_->drawPrompt(cameraRig_.camera(), player_->position(), intermission);
             if (mysteryBox_) mysteryBox_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold(), *zones_);
+            if (altar_) {
+                altar_->drawPrompt(cameraRig_.camera(), player_->position(),
+                                   player_->health() < player_->maxHealth(), *zones_);
+            }
         }
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::LevelUp) cardPicker_.draw();
