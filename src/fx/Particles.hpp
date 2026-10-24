@@ -28,6 +28,8 @@ public:
     void bloodKill(Vector3 position, Vector3 direction);
     // Balle qui frappe le décor : étincelles et poussière. normal : face touchée.
     void impact(Vector3 position, Vector3 normal);
+    // Caisse brisée ou posée : éclats de la couleur donnée (chunks peut valoir 0) et nuage de poussière.
+    void debris(Vector3 position, Color color, int chunks);
     // Poussière sous les pieds pendant un sprint (émission continue, à appeler à chaque image).
     void sprintDust(Vector3 feet, Vector3 direction, float dt);
 

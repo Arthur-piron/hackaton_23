@@ -254,6 +254,11 @@ void World::setBlockerActive(int id, bool active)
     blockers_[static_cast<size_t>(id)].active = active;
 }
 
+void World::moveBlocker(int id, BoundingBox box)
+{
+    blockers_[static_cast<size_t>(id)].box = box;
+}
+
 void World::draw(const Camera3D& camera) const
 {
     DrawModel(ground_, kGroundCenter, 1.0f, WHITE);

@@ -9,6 +9,7 @@
 #include "game/CardEffects.hpp"
 #include "game/Altar.hpp"
 #include "game/Cards.hpp"
+#include "game/Crates.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
 #include "game/Flashlight.hpp"
@@ -100,6 +101,8 @@ private:
     void openShop();
     // Arme prise à la boîte mystère : débloquée, dorée si légendaire, et en main.
     void takeMysteryPrize(const MysteryBox::Prize& prize);
+    // Contenu d'une caisse cassée : or, munitions, pile, ou explosion du tonneau de poudre.
+    void breakCrate(const Crates::Broken& crate);
     void updateShop(float dt);
     void updateTalents(float dt);
     // Fin de partie : ossements gagnés, records et sauvegarde, puis écran de fin.
@@ -135,6 +138,7 @@ private:
     std::unique_ptr<Merchant> merchant_; // nul si la carte n'en déclare pas
     std::unique_ptr<MysteryBox> mysteryBox_; // nulle si la carte n'en déclare pas ; référence world_
     std::unique_ptr<Altar> altar_;           // nul si la carte n'en déclare pas
+    std::unique_ptr<Crates> crates_;         // référence world_ : détruit avant lui
     std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;
