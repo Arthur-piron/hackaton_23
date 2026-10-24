@@ -22,14 +22,40 @@ constexpr float kChestHeight = 0.95f;
 constexpr Vector3 kZombieEye = {0.085f, 0.2f, 0.19f};
 constexpr Vector3 kSkeletonEye = {0.06f, 0.13f, 0.17f};
 constexpr float kEyeFadeDuration = 0.4f;
+// Vampire : il tourne autour du joueur pour le prendre de dos, et fuit la lumière.
+constexpr float kFlankCommitDistance = 3.0f;  // en deçà, il fonce sur le joueur
+constexpr float kFlankBehindAngle = 1.9f;     // radians depuis le regard du joueur : « dans son dos »
+constexpr float kFlankStep = 0.6f;            // radians gagnés autour du joueur à chaque visée
+constexpr float kFlankTighten = 0.8f;         // le cercle se resserre à chaque visée
+constexpr float kFleeSpeedBoost = 1.35f;
+constexpr float kLightAversion = 1.4f;
+// Spectre : flotte au-dessus du sol, semi-transparent, se dissipe à sa mort.
+constexpr float kGhostHover = 0.3f;
+constexpr float kGhostBob = 0.12f;
+constexpr float kGhostBobSpeed = 2.2f;
+constexpr unsigned char kGhostAlpha = 120;
+constexpr float kGhostFadeDuration = 1.5f;
+// Ralentissement (carte Gel...) : teinte bleu glacé.
+constexpr Color kFrostTint = {150, 205, 255, 255};
+constexpr float kFrostTintStrength = 0.6f;
 
 const EnemyStats kStats[] = {
-    // nom, modèle, vie, vitesse, dégâts, portée, recharge, échelle, teinte, anim, vitesse anim, score, résistance
-    {"Marcheur", "character-zombie.glb", 60.0f, 1.7f, 12.0f, 1.25f, 1.2f, 1.0f, {255, 255, 255, 255}, "walk", 1.6f, 10, 0.0f},
-    {"Coureur", "character-zombie.glb", 35.0f, 5.2f, 8.0f, 1.2f, 0.9f, 0.92f, {255, 150, 140, 255}, "sprint", 4.5f, 15, 0.0f},
-    {"Squelette", "character-skeleton.glb", 45.0f, 2.8f, 10.0f, 1.25f, 1.0f, 1.0f, {255, 255, 255, 255}, "walk", 2.2f, 15, 0.2f},
-    {"Brute", "character-zombie.glb", 420.0f, 1.35f, 30.0f, 1.8f, 1.8f, 1.6f, {150, 190, 140, 255}, "walk", 1.2f, 60, 0.8f},
+    // nom, modèle, vie, vitesse, dégâts, portée, recharge, échelle, teinte, anim, vitesse anim, score, résistance,
+    // craint la lumière, éthéré
+    {"Marcheur", "character-zombie.glb", 60.0f, 1.7f, 12.0f, 1.25f, 1.2f, 1.0f, {255, 255, 255, 255}, "walk", 1.6f, 10, 0.0f,
+     false, false},
+    {"Coureur", "character-zombie.glb", 35.0f, 5.2f, 8.0f, 1.2f, 0.9f, 0.92f, {255, 150, 140, 255}, "sprint", 4.5f, 15, 0.0f,
+     false, false},
+    {"Squelette", "character-skeleton.glb", 45.0f, 2.8f, 10.0f, 1.25f, 1.0f, 1.0f, {255, 255, 255, 255}, "walk", 2.2f, 15,
+     0.2f, false, false},
+    {"Brute", "character-zombie.glb", 420.0f, 1.35f, 30.0f, 1.8f, 1.8f, 1.6f, {150, 190, 140, 255}, "walk", 1.2f, 60, 0.8f,
+     false, false},
+    {"Vampire", "character-vampire.glb", 80.0f, 3.4f, 16.0f, 1.25f, 1.1f, 1.0f, {255, 255, 255, 255}, "walk", 2.2f, 25,
+     0.3f, true, false},
+    {"Spectre", "character-ghost.glb", 70.0f, 2.3f, 14.0f, 1.3f, 1.4f, 1.05f, {190, 225, 255, kGhostAlpha}, "idle", 2.3f,
+     25, 0.6f, false, true},
 };
+static_assert(sizeof(kStats) / sizeof(kStats[0]) == static_cast<size_t>(EnemyType::Count), "un profil par type d'ennemi");
 
 float randomRange(float min, float max)
 {
@@ -39,6 +65,16 @@ float randomRange(float min, float max)
 float angleDelta(float a, float b)
 {
     return std::remainder(b - a, 2.0f * PI);
+}
+
+Vector3 flatTo(Vector3 from, Vector3 to)
+{
+    return {to.x - from.x, 0.0f, to.z - from.z};
+}
+
+unsigned char lerpChannel(unsigned char from, unsigned char to, float k)
+{
+    return static_cast<unsigned char>(from + (to - from) * k);
 }
 }
 
@@ -56,6 +92,7 @@ Enemy::Enemy(unsigned id, EnemyType type, const AnimatedModel& model, Vector3 po
     , groanTimer_(randomRange(1.0f, 8.0f))
     , speedJitter_(randomRange(0.85f, 1.15f))
     , clipMove_(model.findClip(enemyStats(type).moveClip))
+    , clipFlee_(model.findClip("sprint"))
     , clipAttack_(model.findClip("attack-melee-right"))
     , clipDie_(model.findClip("die"))
     , headNode_(model.findNode("head"))
@@ -67,7 +104,16 @@ Enemy::Enemy(unsigned id, EnemyType type, const AnimatedModel& model, Vector3 po
 Vector3 Enemy::hitCenter() const
 {
     const float s = stats().scale;
-    return {position_.x, kChestHeight * s, position_.z};
+    return {position_.x, kChestHeight * s + hoverHeight(), position_.z};
+}
+
+float Enemy::hoverHeight() const
+{
+    if (!stats().ethereal) return 0.0f;
+    const float hover = kGhostHover + std::sin(age_ * kGhostBobSpeed + static_cast<float>(id_)) * kGhostBob;
+    // À sa mort, le spectre retombe en se dissipant.
+    if (state_ == State::Dying) return hover * std::max(0.0f, 1.0f - deathTimer_ / kGhostFadeDuration);
+    return hover;
 }
 
 float Enemy::radius() const
@@ -75,10 +121,32 @@ float Enemy::radius() const
     return kBodyRadius * stats().scale;
 }
 
-float Enemy::update(float dt, Vector3 target, EventQueue& events)
+Vector3 Enemy::flankPoint(const EnemySenses& senses) const
+{
+    const Vector3 fromPlayer = flatTo(senses.player, position_);
+    const float distance = Vector3Length(fromPlayer);
+    if (distance <= kFlankCommitDistance) return senses.player;
+    // Angle autour du joueur : 0 devant lui, ±PI dans son dos.
+    const float facing = std::atan2(senses.playerForward.x, senses.playerForward.z);
+    const float bearing = std::atan2(fromPlayer.x, fromPlayer.z);
+    const float offset = angleDelta(facing, bearing);
+    if (std::fabs(offset) >= kFlankBehindAngle) return senses.player;
+    // Il glisse vers le dos du joueur par le côté où il se trouve déjà, en se rapprochant.
+    float side = offset > 0.0f ? 1.0f : -1.0f;
+    if (std::fabs(offset) < 1e-3f) side = (id_ % 2) == 0 ? 1.0f : -1.0f;
+    const float next = bearing + side * kFlankStep;
+    const float radius = std::max(kFlankCommitDistance, distance * kFlankTighten);
+    return {senses.player.x + std::sin(next) * radius, 0.0f, senses.player.z + std::cos(next) * radius};
+}
+
+float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
 {
     const EnemyStats& s = stats();
     flash_ = std::max(0.0f, flash_ - dt);
+    age_ += dt;
+    slowTimer_ = std::max(0.0f, slowTimer_ - dt);
+    if (slowTimer_ <= 0.0f) slowFraction_ = 0.0f;
+    const float pace = speedJitter_ * (1.0f - slowFraction_);
     model_->update(anim_, dt);
 
     if (state_ == State::Dying) {
@@ -94,10 +162,29 @@ float Enemy::update(float dt, Vector3 target, EventQueue& events)
     position_ = Vector3Add(position_, Vector3Scale(knockback_, dt));
     knockback_ = Vector3Scale(knockback_, std::exp(-kKnockbackDamping * dt));
 
-    const Vector3 toTarget = {target.x - position_.x, 0.0f, target.z - position_.z};
-    const float distance = Vector3Length(toTarget);
-    if (distance > 0.001f) {
-        yaw_ += angleDelta(yaw_, std::atan2(toTarget.x, toTarget.z)) * (1.0f - std::exp(-kTurnSharpness * dt));
+    const Vector3 toPlayer = flatTo(position_, senses.player);
+    const float playerDistance = Vector3Length(toPlayer);
+    const bool chasingPlayer = Vector3Distance(senses.goal, senses.player) < 1e-3f;
+
+    // Le vampire pris dans la lampe torche détale ; sinon il contourne le joueur.
+    fleeing_ = s.fearsLight && senses.inFlashlight;
+    Vector3 destination = senses.goal;
+    if (s.fearsLight && chasingPlayer && !fleeing_) destination = flankPoint(senses);
+
+    const Vector3 toDestination = flatTo(position_, destination);
+    Vector3 heading = Vector3Normalize(toDestination);
+    if (fleeing_) {
+        heading = Vector3Normalize(senses.lightEscape);
+        if (Vector3Length(heading) < 0.5f) heading = Vector3Normalize(Vector3Negate(toPlayer));
+    } else if (s.fearsLight && playerDistance > kFlankCommitDistance) {
+        // Loin du joueur, il évite les flaques de lumière du décor.
+        heading = Vector3Normalize(Vector3Add(heading, Vector3Scale(senses.lightEscape, kLightAversion)));
+    }
+
+    // Il regarde le joueur, sauf quand il s'enfuit.
+    const Vector3 look = fleeing_ ? heading : flatTo(position_, senses.goal);
+    if (Vector3Length(look) > 0.001f) {
+        yaw_ += angleDelta(yaw_, std::atan2(look.x, look.z)) * (1.0f - std::exp(-kTurnSharpness * dt));
     }
 
     groanTimer_ -= dt;
@@ -114,29 +201,33 @@ float Enemy::update(float dt, Vector3 target, EventQueue& events)
         const float duration = model_->clipDuration(clipAttack_);
         if (!attackDealt_ && anim_.time >= duration * kAttackImpactFraction) {
             attackDealt_ = true;
-            if (distance <= reach + kAttackReachBonus) {
+            if (playerDistance <= reach + kAttackReachBonus) {
                 damage = s.damage;
                 events.push_back({EventType::EnemyAttack, position_, s.damage});
             }
         }
         if (model_->isFinished(anim_)) {
             state_ = State::Chasing;
-            model_->play(anim_, clipMove_, true, speedJitter_);
+            model_->play(anim_, clipMove_, true, pace);
         }
         return damage;
     }
 
-    if (distance <= reach && attackCooldown_ <= 0.0f) {
+    if (!fleeing_ && playerDistance <= reach && attackCooldown_ <= 0.0f) {
         state_ = State::Attacking;
         attackDealt_ = false;
         attackCooldown_ = s.attackCooldown;
-        model_->play(anim_, clipAttack_, false, 1.0f, true);
+        model_->play(anim_, clipAttack_, false, 1.0f - slowFraction_, true);
         return 0.0f;
     }
 
-    if (distance > reach * 0.8f) {
-        const float speed = s.speed * speedJitter_;
-        position_ = Vector3Add(position_, Vector3Scale(Vector3Normalize(toTarget), speed * dt));
+    if (fleeing_) {
+        const float speed = s.speed * pace * kFleeSpeedBoost;
+        position_ = Vector3Add(position_, Vector3Scale(heading, speed * dt));
+        model_->play(anim_, clipFlee_ >= 0 ? clipFlee_ : clipMove_, true, speed / s.animReferenceSpeed);
+    } else if (!chasingPlayer || playerDistance > reach * 0.8f) {
+        const float speed = s.speed * pace;
+        position_ = Vector3Add(position_, Vector3Scale(heading, speed * dt));
         model_->play(anim_, clipMove_, true, speed / s.animReferenceSpeed);
     }
     return 0.0f;
@@ -160,6 +251,13 @@ bool Enemy::hit(float damage, Vector3 direction, float knockback, EventQueue& ev
     return true;
 }
 
+void Enemy::slow(float fraction, float duration)
+{
+    if (state_ == State::Dying) return;
+    slowFraction_ = std::max(slowFraction_, std::clamp(fraction, 0.0f, 1.0f));
+    slowTimer_ = std::max(slowTimer_, duration);
+}
+
 void Enemy::push(Vector3 offset)
 {
     if (state_ == State::Dying) return;
@@ -170,7 +268,7 @@ Matrix Enemy::bodyTransform() const
 {
     const float scale = kKenneyScale * stats().scale;
     return MatrixMultiply(MatrixMultiply(MatrixScale(scale, scale, scale), MatrixRotateY(yaw_)),
-                          MatrixTranslate(position_.x, position_.y, position_.z));
+                          MatrixTranslate(position_.x, position_.y + hoverHeight(), position_.z));
 }
 
 void Enemy::eyePositions(Vector3& left, Vector3& right) const
@@ -190,12 +288,22 @@ float Enemy::eyeGlow() const
 void Enemy::draw() const
 {
     Color tint = stats().tint;
+    if (slowTimer_ > 0.0f) {
+        const float k = kFrostTintStrength;
+        tint.r = lerpChannel(tint.r, kFrostTint.r, k);
+        tint.g = lerpChannel(tint.g, kFrostTint.g, k);
+        tint.b = lerpChannel(tint.b, kFrostTint.b, k);
+    }
     if (flash_ > 0.0f) {
         // Éclat vers le blanc chaud quand l'ennemi est touché.
         const float k = flash_ / kFlashDuration;
-        tint.r = static_cast<unsigned char>(tint.r + (255 - tint.r) * k);
-        tint.g = static_cast<unsigned char>(tint.g + (230 - tint.g) * k);
-        tint.b = static_cast<unsigned char>(tint.b + (200 - tint.b) * k);
+        tint.r = lerpChannel(tint.r, 255, k);
+        tint.g = lerpChannel(tint.g, 230, k);
+        tint.b = lerpChannel(tint.b, 200, k);
+    }
+    if (stats().ethereal && state_ == State::Dying) {
+        tint.a = static_cast<unsigned char>(tint.a * std::max(0.0f, 1.0f - deathTimer_ / kGhostFadeDuration));
+        if (tint.a == 0) return;
     }
     model_->draw(anim_, bodyTransform(), tint);
 }

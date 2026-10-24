@@ -10,6 +10,8 @@ const Economy::Reward kKillRewards[] = {
     {6, 4},   // Coureur
     {7, 5},   // Squelette
     {30, 20}, // Brute
+    {10, 7},  // Vampire
+    {9, 6},   // Spectre
 };
 static_assert(sizeof(kKillRewards) / sizeof(kKillRewards[0]) == static_cast<size_t>(EnemyType::Count),
               "une récompense par type d'ennemi");
