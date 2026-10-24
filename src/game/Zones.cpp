@@ -1,5 +1,6 @@
 #include "game/Zones.hpp"
 
+#include "core/Fonts.hpp"
 #include "game/Economy.hpp"
 #include "game/Scale.hpp"
 #include "game/World.hpp"
@@ -58,10 +59,10 @@ BoundingBox gateBox(Vector3 center, Vector3 axis, Vector3 normal, float halfWidt
 
 void drawCenteredText(const char* text, Vector2 at, int size, Color color)
 {
-    const int x = static_cast<int>(at.x) - MeasureText(text, size) / 2;
+    const int x = static_cast<int>(at.x) - fonts::measureText(text, size) / 2;
     const int y = static_cast<int>(at.y);
-    DrawText(text, x + 2, y + 2, size, kPromptShadow);
-    DrawText(text, x, y, size, color);
+    fonts::drawText(text, x + 2, y + 2, size, kPromptShadow);
+    fonts::drawText(text, x, y, size, color);
 }
 }
 
