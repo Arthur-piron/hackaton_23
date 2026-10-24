@@ -43,6 +43,10 @@ struct HudData {
     int comboMultiplier = 1;
     float comboTimeLeft = 0.0f; // fraction 0..1 de la fenêtre du combo
     std::vector<HudCard> cards;
+    // Ressources de construction (GAME.md §7.1).
+    int wood = 0;
+    int scrap = 0;
+    int fuel = 0;
 };
 
 // Interface en jeu : barres, munitions, vague, messages, chiffres de dégâts.
@@ -58,6 +62,7 @@ public:
     // Petits sursauts visuels du compteur d'or et du combo.
     void pulseGold() { goldPulse_ = 1.0f; }
     void pulseCombo() { comboPulse_ = 1.0f; }
+    void pulseResources() { resourcePulse_ = 1.0f; }
     void clear();
 
 private:
@@ -85,5 +90,6 @@ private:
     float announceAge_ = 999.0f;
     float goldPulse_ = 0.0f;
     float comboPulse_ = 0.0f;
+    float resourcePulse_ = 0.0f;
     float time_ = 0.0f;
 };

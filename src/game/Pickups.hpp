@@ -1,13 +1,12 @@
 #pragma once
 
+#include "game/Economy.hpp"
 #include "game/Events.hpp"
 #include "raylib.h"
 
 #include <vector>
 
-class Economy;
-
-// Objets lâchés au sol par les morts : pièces d'or, orbes d'XP et piles de lampe. Ils jaillissent,
+// Objets lâchés au sol par les morts : pièces d'or, orbes d'XP, piles de lampe et ressources. Ils jaillissent,
 // rebondissent, sont aimantés vers le joueur puis disparaissent s'ils traînent.
 class Pickups {
 public:
@@ -18,6 +17,8 @@ public:
     void spawnCoinRain(Vector3 center, int coins, int goldPerCoin);
     // Pile pour la lampe torche : ramassée, elle publie BatteryPicked.
     void spawnBattery(Vector3 position);
+    // Bois, ferraille ou bidon : ramassés, ils publient ResourcePicked (value = quantité, direction.x = Resource).
+    void spawnResource(Resource resource, int amount, Vector3 position);
     // Bonus des cartes sur le rayon d'aimantation.
     void setMagnetMultiplier(float multiplier) { magnetMultiplier_ = multiplier; }
     // Aimante, ramasse (crédite l'économie) et fait vieillir les objets.
@@ -25,7 +26,7 @@ public:
     void draw() const;
 
 private:
-    enum class Kind { Gold, Xp, Battery };
+    enum class Kind { Gold, Xp, Battery, Wood, Scrap, Fuel };
 
     struct Item {
         Kind kind = Kind::Gold;
@@ -39,6 +40,10 @@ private:
     };
 
     void spawn(Kind kind, int value, Vector3 position);
+    static bool isResource(Kind kind);
+    static Resource resourceOf(Kind kind);
+    // Les ressources restent plus longtemps au sol que l'or.
+    static float lifetimeOf(Kind kind);
 
     std::vector<Item> items_;
     float magnetMultiplier_ = 1.0f;

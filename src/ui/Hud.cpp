@@ -26,6 +26,10 @@ constexpr Color kDim = {150, 145, 135, 255};
 constexpr Color kGold = {255, 205, 90, 255};
 constexpr Color kGoldDark = {170, 110, 20, 255};
 constexpr Color kXp = {70, 225, 190, 255};
+constexpr Color kWoodIcon = {170, 115, 60, 255};
+constexpr Color kScrapIcon = {165, 175, 185, 255};
+constexpr Color kFuelIcon = {215, 55, 45, 255};
+constexpr Color kResourceText = {225, 220, 205, 255};
 constexpr Color kXpBack = {20, 55, 50, 255};
 // Couleur du combo selon le multiplicateur (×1 à ×5).
 constexpr Color kComboColors[] = {
@@ -55,6 +59,7 @@ void Hud::update(float dt)
     announceAge_ += dt;
     time_ += dt;
     goldPulse_ = std::max(0.0f, goldPulse_ - kGoldPulseDecay * dt);
+    resourcePulse_ = std::max(0.0f, resourcePulse_ - kGoldPulseDecay * dt);
     comboPulse_ = std::max(0.0f, comboPulse_ - kComboPulseDecay * dt);
     for (FloatingText& n : numbers_) {
         n.age += dt;
@@ -71,6 +76,7 @@ void Hud::clear()
     announceAge_ = 999.0f;
     goldPulse_ = 0.0f;
     comboPulse_ = 0.0f;
+    resourcePulse_ = 0.0f;
 }
 
 void Hud::announce(const std::string& title, const std::string& subtitle, Color color)
@@ -209,10 +215,10 @@ void Hud::drawWave(const HudData& data) const
 
 void Hud::drawEconomy(const HudData& data) const
 {
-    // Sous le compteur de FPS : or, puis niveau et barre d'XP.
+    // Sous le compteur de FPS : or, niveau et barre d'XP, puis bois, ferraille et bidons.
     const int x = 12;
     const int y = 38;
-    DrawRectangleRounded({static_cast<float>(x), static_cast<float>(y), 236.0f, 74.0f}, 0.2f, 6, kPanel);
+    DrawRectangleRounded({static_cast<float>(x), static_cast<float>(y), 236.0f, 102.0f}, 0.15f, 6, kPanel);
 
     const int coinX = x + 24;
     const int coinY = y + 22;
@@ -235,6 +241,23 @@ void Hud::drawEconomy(const HudData& data) const
     const int barWidth = x + 236 - 14 - barX;
     DrawRectangle(barX, barY, barWidth, 8, kXpBack);
     DrawRectangle(barX, barY, static_cast<int>(barWidth * std::clamp(data.xpProgress, 0.0f, 1.0f)), 8, kXp);
+
+    // Une petite pastille de couleur par ressource, suivie de sa quantité.
+    struct Counter {
+        int value;
+        Color color;
+    };
+    const Counter counters[] = {{data.wood, kWoodIcon}, {data.scrap, kScrapIcon}, {data.fuel, kFuelIcon}};
+    const int rowY = y + 80;
+    const int size = static_cast<int>(18 * (1.0f + 0.15f * resourcePulse_));
+    int cursor = x + 14;
+    for (const Counter& c : counters) {
+        DrawRectangleRounded({static_cast<float>(cursor), static_cast<float>(rowY - 6), 12.0f, 12.0f}, 0.3f, 4,
+                             c.color);
+        const char* text = TextFormat("%d", c.value);
+        drawTextShadow(text, cursor + 18, rowY - size / 2, size, kResourceText);
+        cursor += 18 + fonts::measureText(text, size) + 22;
+    }
 }
 
 void Hud::drawCombo(const HudData& data) const

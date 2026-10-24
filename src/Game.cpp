@@ -809,20 +809,20 @@ void Game::breakCrate(const Crates::Broken& crate)
 {
     const Vector3 at = crate.position;
     switch (crate.kind) {
-    case CrateKind::Wood: pickups_.spawnLoot(at, GetRandomValue(8, 15), 0); break;
+    case CrateKind::Wood: pickups_.spawnResource(Resource::Wood, GetRandomValue(3, 5), at); break;
     case CrateKind::Large:
-        pickups_.spawnLoot(at, GetRandomValue(20, 35), 0);
-        if (chance(0.3f)) pickups_.spawnBattery(at);
+        pickups_.spawnResource(Resource::Scrap, GetRandomValue(2, 4), at);
+        pickups_.spawnResource(Resource::Wood, GetRandomValue(1, 2), at);
         break;
     case CrateKind::Ammo:
         // Un chargeur de réserve pour l'arme en main.
         arsenal_.addAmmo(arsenal_.current(), arsenal_.magazineSize());
-        pickups_.spawnLoot(at, 5, 0);
+        pickups_.spawnResource(Resource::Scrap, GetRandomValue(1, 2), at);
         audio_.play("reload", 0.7f, 0.0f);
         break;
     case CrateKind::Barrel:
         if (chance(0.6f)) {
-            pickups_.spawnBattery(at);
+            pickups_.spawnResource(Resource::Fuel, 1, at);
         } else {
             pickups_.spawnLoot(at, GetRandomValue(10, 20), 0);
         }
@@ -928,6 +928,9 @@ void Game::rewardKill(const Enemy& enemy)
     const Economy::Reward reward = economy_.addKill(enemy.type());
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
+    const Economy::Salvage salvage = Economy::rollSalvage(enemy.type());
+    pickups_.spawnResource(Resource::Wood, salvage.wood, enemy.hitCenter());
+    pickups_.spawnResource(Resource::Scrap, salvage.scrap, enemy.hitCenter());
     hud_.pulseCombo();
 
     // Crochet onKill : Vampirisme, Explosion nécrotique, Fortune du mort.
@@ -1089,6 +1092,10 @@ void Game::handleEvents()
                 audio_.playAt("ui_confirm", ev.position, 0.8f, 0.1f);
             }
             break;
+        case EventType::ResourcePicked:
+            audio_.play("pickup", 0.35f, 0.2f);
+            hud_.pulseResources();
+            break;
         case EventType::CrateLanded:
             audio_.playAt("body_fall", ev.position, 0.5f, 0.2f);
             particles_->debris(ev.position, kCrateWoodColor, 0);
@@ -1164,6 +1171,9 @@ HudData Game::hudData() const
     d.combo = economy_.combo();
     d.comboMultiplier = economy_.comboMultiplier();
     d.comboTimeLeft = economy_.comboTimeLeft() / Economy::kComboWindow;
+    d.wood = economy_.resource(Resource::Wood);
+    d.scrap = economy_.resource(Resource::Scrap);
+    d.fuel = economy_.resource(Resource::Fuel);
     for (CardId id : cards_.owned()) {
         const CardInfo& card = Cards::info(id);
         d.cards.push_back({card.shortName, CardPicker::categoryColor(card.category),
