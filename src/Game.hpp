@@ -22,6 +22,7 @@
 #include "game/Shop.hpp"
 #include "game/Structures.hpp"
 #include "game/Traps.hpp"
+#include "game/Turrets.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
 #include "game/Progression.hpp"
@@ -85,10 +86,12 @@ private:
     void resolveProjectiles();
     // Point d'entrée unique des dégâts infligés aux ennemis (balles, feu, explosions) :
     // une mort passe toujours par rewardKill. Renvoie vrai si l'ennemi meurt.
-    bool damageEnemy(Enemy& enemy, float damage, Vector3 direction, float knockback, HitKind kind = HitKind::Normal);
+    // byDefense : coup d'une tourelle (la mort ne fait pas monter le combo, XP ×0,5).
+    bool damageEnemy(Enemy& enemy, float damage, Vector3 direction, float knockback, HitKind kind = HitKind::Normal,
+                     bool byDefense = false);
     // Fait progresser le combo, lâche l'or et l'XP d'un ennemi qui vient de mourir
     // et déclenche les cartes liées aux morts (crochet onKill).
-    void rewardKill(const Enemy& enemy);
+    void rewardKill(const Enemy& enemy, bool byDefense = false);
     // Dégâts reçus par le joueur (crochet onDamaged : Dernier rempart).
     void hurtPlayer(float damage, Vector3 from);
     // Brûlures, explosions nécrotiques en attente, Soleil de poche.
@@ -153,6 +156,7 @@ private:
     BuildMode buildMode_;
     BuildBar buildBar_;
     Traps traps_;
+    std::unique_ptr<Turrets> turrets_; // modèles partagés avec world_
     FlowField flowField_;        // navigation des morts, recalculée toutes les kFlowFieldInterval
     float flowFieldTimer_ = 0.0f;
     std::unique_ptr<Shop> shop_;

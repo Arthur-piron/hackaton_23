@@ -34,6 +34,8 @@ public:
 
     // Enregistre une mort : fait progresser le combo et renvoie ce qu'elle lâche.
     Reward addKill(EnemyType type);
+    // Mort tué par une tourelle : pas de combo, XP ×0,5 (GAME.md §7.3).
+    Reward addDefenseKill(EnemyType type);
     // Prendre un coup divise le combo par deux.
     void onPlayerDamaged();
 

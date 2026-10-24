@@ -12,7 +12,7 @@ class World;
 // Catégories du mode construction (docs/GAME.md §7.2), dans l'ordre des touches 1 à 4.
 enum class BuildCategory { Defenses, Turrets, Traps, Utilities, Count };
 
-enum class StructureKind { Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Count };
+enum class StructureKind { Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, Count };
 
 // Description d'une structure du catalogue (GAME.md §7.3).
 struct StructureInfo {
@@ -36,6 +36,12 @@ struct TrapState {
     float timer = 0.0f;  // réarmement, mèche de la mine ou durée du feu
     bool active = false; // mine qui bipe, flaque en feu, mâchoires refermées
     std::vector<std::pair<unsigned, float>> cooldowns; // pics : (mort, délai avant un nouveau coup)
+};
+
+// État d'une tourelle posée, mis à jour par Turrets.
+struct TurretState {
+    float cooldown = 0.0f;
+    float yaw = 0.0f; // orientation de l'arme, en radians
 };
 
 // Les structures posées par le joueur : collision dans World, rendu (fissurée, en ruine),
@@ -69,6 +75,8 @@ public:
     Vector3 center(int id) const { return items_[static_cast<size_t>(id)].center; }
     TrapState& trap(int id) { return items_[static_cast<size_t>(id)].trap; }
     const TrapState& trap(int id) const { return items_[static_cast<size_t>(id)].trap; }
+    TurretState& turret(int id) { return items_[static_cast<size_t>(id)].turret; }
+    const TurretState& turret(int id) const { return items_[static_cast<size_t>(id)].turret; }
     // Structure qui arrête les morts à moins de `reach` du point (-1 : aucune).
     int blockingNear(Vector3 point, float reach) const;
     // Inflige des dégâts ; publie StructureDamaged (au plus deux fois par seconde) et
@@ -95,6 +103,7 @@ private:
         float hitCooldown = 0.0f;
         float shake = 0.0f;
         TrapState trap;
+        TurretState turret;
     };
 
     World& world_;
