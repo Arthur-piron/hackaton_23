@@ -34,6 +34,8 @@ public:
 
     // Emprise au sol (x, z, largeur, profondeur) de chaque zone ouverte.
     std::vector<Rectangle> openAreas() const;
+    // Centres des grilles (on ne construit pas devant).
+    std::vector<Vector3> gateCenters() const;
     // Points d'apparition des zones ouvertes.
     std::vector<Vector3> openSpawnPoints() const;
     // Point vers lequel marcher depuis `from` pour rejoindre `target` :

@@ -19,6 +19,7 @@ public:
     // Enseigne au-dessus du marchand, et invite « E : marchand » à portée.
     void drawPrompt(const Camera3D& camera, Vector3 player, bool open) const;
 
+    Vector3 position() const { return position_; }
     float distanceTo(Vector3 player) const;
     bool inReach(Vector3 player) const { return distanceTo(player) <= kInteractDistance; }
 

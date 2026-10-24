@@ -202,6 +202,7 @@ Game::Game(const Options& options)
         merchant_ = std::make_unique<Merchant>(*merchantModel_, map.merchants.front());
     }
     crates_ = std::make_unique<Crates>(*world_);
+    structures_ = std::make_unique<Structures>(*world_);
     if (!map.altars.empty()) altar_ = std::make_unique<Altar>(map.altars.front());
     if (!map.mysteryBoxes.empty()) {
         mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
@@ -233,6 +234,11 @@ Game::Game(const Options& options)
             mysteryBox_->interact(mysteryBox_->position(), *zones_, economy_, events_);
         }
         crates_->spawnWave(Crates::kMaxCrates, *zones_, player_->position());
+        // Une palissade, une barricade et une porte devant le joueur.
+        for (int i = 0; i < static_cast<int>(StructureKind::Count); ++i) {
+            structures_->place(static_cast<StructureKind>(i),
+                               Vector3Add(player_->position(), {2.0f + 2.0f * static_cast<float>(i), 0.0f, 2.5f}), false);
+        }
         musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
     } else {
         musicDirector_.menu(audio_);
@@ -252,6 +258,7 @@ Game::~Game()
     merchantModel_.reset();
     mysteryBox_.reset();
     crates_.reset();
+    structures_.reset();
     player_.reset();
     playerModel_.reset();
     zones_.reset();
@@ -321,6 +328,8 @@ void Game::startNewGame()
     if (mysteryBox_) mysteryBox_->reset();
     if (altar_) altar_->reset();
     crates_->clear();
+    structures_->clear();
+    buildMode_.reset();
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
@@ -510,8 +519,9 @@ void Game::updatePlaying(float dt)
     }
 
     player_->update(dt, *world_, c.aim, alive ? c.move : Vector3{0.0f, 0.0f, 0.0f}, c.sprint);
-    flashlight_.update(dt, alive && c.light, player_->position(), events_);
-    if (alive) {
+    const bool building = updateBase(dt, c);
+    flashlight_.update(dt, alive && c.light && !building, player_->position(), events_);
+    if (alive && !building) {
         if (c.selectWeapon >= 0) arsenal_.select(c.selectWeapon);
         if (c.cycleWeapon != 0) arsenal_.cycle(c.cycleWeapon);
         if (arsenal_.update(dt, c.fireHeld, c.firePressed, c.reload, player_->muzzle(), player_->forward(),
@@ -842,6 +852,28 @@ void Game::breakCrate(const Crates::Broken& crate)
     }
 }
 
+bool Game::updateBase(float dt, const Controls& c)
+{
+    structures_->update(dt, player_->position());
+    if (player_->isDead()) {
+        buildMode_.reset();
+        return false;
+    }
+    BuildMode::Surroundings around{*world_, *zones_, player_->position(), {}};
+    if (merchant_) around.keepClear.push_back(merchant_->position());
+    if (mysteryBox_) around.keepClear.push_back(mysteryBox_->position());
+    if (altar_) around.keepClear.push_back(altar_->position());
+    buildMode_.update(c.aim, waves_->phase() == WaveManager::Phase::Intermission, around, *structures_, economy_,
+                      events_);
+    return buildMode_.isActive();
+}
+
+void Game::drawBase() const
+{
+    structures_->draw();
+    buildMode_.drawWorld(*structures_);
+}
+
 void Game::updateShop(float dt)
 {
     audio_.setListener(player_->position());
@@ -1016,6 +1048,7 @@ void Game::handleEvents()
             hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
             lastStandReady_ = true;
             if (altar_) altar_->recharge();
+            buildMode_.reset();
             break;
         case EventType::WaveCleared:
             audio_.play("ui_confirm", 0.7f, 0.0f);
@@ -1091,6 +1124,20 @@ void Game::handleEvents()
             } else {
                 audio_.playAt("ui_confirm", ev.position, 0.8f, 0.1f);
             }
+            break;
+        case EventType::BuildDenied:
+            audio_.play("dry_fire", 0.5f, 0.0f);
+            if (waves_->phase() != WaveManager::Phase::Intermission) {
+                hud_.announce("PAS PENDANT L'ASSAUT", "Construis entre les vagues (B)", kWaveColor);
+            }
+            break;
+        case EventType::StructurePlaced:
+            audio_.playAt("hit_wood", ev.position, 0.8f, 0.15f);
+            particles_->debris(ev.position, kCrateWoodColor, 0);
+            break;
+        case EventType::StructureRemoved:
+            audio_.play("pickup", 0.6f, 0.1f);
+            particles_->debris(ev.position, kCrateWoodColor, kCrateChunks / 2);
             break;
         case EventType::ResourcePicked:
             audio_.play("pickup", 0.35f, 0.2f);
@@ -1208,6 +1255,10 @@ void Game::draw() const
             }
         }
         hud_.draw(cameraRig_.camera(), hudData());
+        if (state_ == State::Playing) {
+            buildMode_.drawPrompt(cameraRig_.camera());
+            buildBar_.draw(buildMode_, economy_);
+        }
         if (state_ == State::LevelUp) cardPicker_.draw();
         if (state_ == State::Shop) {
             shopScreen_.draw(*shop_, arsenal_, economy_.gold(), shopFrozenLeft_, waves_->intermissionLeft());
@@ -1229,6 +1280,7 @@ void Game::drawWorld() const
     if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
     if (mysteryBox_) mysteryBox_->draw(weaponModels_);
     crates_->draw();
+    drawBase();
     waves_->draw();
     cardEffects_.draw(waves_->enemies());
     const int weapon = arsenal_.current();
