@@ -134,6 +134,21 @@ Vector3 readMoveKeys()
     if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) dir.x += 1.0f;
     return Vector3Length(dir) > 0.0f ? Vector3Normalize(dir) : dir;
 }
+
+std::string characterModelPath(CharacterId id)
+{
+    return assetPath(std::string("models/graveyard/") + characterInfo(id).model);
+}
+}
+
+void Game::loadCharacter(CharacterId id)
+{
+    // Le joueur passe sur le nouveau modèle avant que l'ancien ne soit libéré.
+    auto model = std::make_unique<AnimatedModel>(characterModelPath(id));
+    lighting_->apply(model->model());
+    player_->setModel(*model);
+    playerModel_ = std::move(model);
+    character_ = id;
 }
 
 Game::Game(const Options& options)
@@ -152,8 +167,9 @@ Game::Game(const Options& options)
     const MapData map = loadMapFile(assetPath("maps/graveyard.txt"));
     world_ = std::make_unique<World>(map);
     zones_ = std::make_unique<Zones>(map, *world_);
-    keeperModel_ = std::make_unique<AnimatedModel>(assetPath("models/graveyard/character-keeper.glb"));
-    player_ = std::make_unique<Player>(*keeperModel_);
+    character_ = progression_->selectedCharacter();
+    playerModel_ = std::make_unique<AnimatedModel>(characterModelPath(character_));
+    player_ = std::make_unique<Player>(*playerModel_);
     waves_ = std::make_unique<WaveManager>();
     for (const WeaponStats& weapon : Arsenal::catalog()) {
         weaponModels_.push_back(LoadModel(assetPath("models/blaster/" + weapon.model).c_str()));
@@ -165,7 +181,7 @@ Game::Game(const Options& options)
     waves_->setLights(world_->lights());
     world_->setShader(lighting_->shader());
     waves_->setShader(lighting_->shader());
-    lighting_->apply(keeperModel_->model());
+    lighting_->apply(playerModel_->model());
     for (Model& model : weaponModels_) lighting_->apply(model);
     lanternModel_ = LoadModel(assetPath("models/town/lantern.glb").c_str());
     lighting_->apply(lanternModel_);
@@ -212,7 +228,7 @@ Game::~Game()
     merchant_.reset();
     merchantModel_.reset();
     player_.reset();
-    keeperModel_.reset();
+    playerModel_.reset();
     zones_.reset();
     world_.reset();
     CloseAudioDevice();
@@ -263,6 +279,7 @@ void Game::run()
 
 void Game::startNewGame()
 {
+    if (progression_->selectedCharacter() != character_) loadCharacter(progression_->selectedCharacter());
     // Les bonus des cartes sont remis à zéro d'abord : la vie et les chargeurs en dépendent.
     cards_.reset();
     cards_.setRarityBonus(progression_->rarityBonusPercent());
@@ -360,6 +377,11 @@ void Game::update(float dt)
         if (menu.moved) audio_.play("ui_click", 0.35f, 0.1f);
         if (menu.refused) audio_.play("dry_fire", 0.6f, 0.0f);
         if (menu.quit) quitRequested_ = true;
+        if (menu.selectCharacter >= 0) progression_->select(static_cast<CharacterId>(menu.selectCharacter));
+        if (menu.buyCharacter >= 0) {
+            const bool bought = progression_->buy(static_cast<CharacterId>(menu.buyCharacter));
+            audio_.play(bought ? "ui_confirm" : "dry_fire", 0.8f, 0.0f);
+        }
         if (menu.startMode >= 0) {
             mode_ = static_cast<GameMode>(menu.startMode);
             audio_.play("ui_confirm", 0.8f, 0.0f);
@@ -709,14 +731,19 @@ void Game::hurtPlayer(float damage, Vector3 from)
 
 void Game::applyCardModifiers()
 {
+    // Cartes, talents, personnage et mode de jeu se cumulent.
     const CardModifiers& m = cards_.modifiers();
-    arsenal_.setModifiers(m);
-    player_->setSpeedMultiplier(m.moveSpeedMultiplier);
-    player_->setStaminaMultipliers(m.staminaMultiplier, m.staminaRegenMultiplier);
-    player_->setMaxHealthBonus(m.maxHealthBonus + progression_->startHealthBonus());
+    const CharacterInfo& c = characterInfo(character_);
+    CardModifiers weapons = m;
+    weapons.damageMultiplier *= c.damage;
+    arsenal_.setModifiers(weapons);
+    player_->setSpeedMultiplier(m.moveSpeedMultiplier * c.speed);
+    player_->setStaminaMultipliers(m.staminaMultiplier * c.staminaCapacity, m.staminaRegenMultiplier * c.staminaRegen);
+    player_->setMaxHealthBonus(m.maxHealthBonus + progression_->startHealthBonus() + c.healthBonus);
     economy_.setGoldMultiplier(m.goldMultiplier * gameModeRules(mode_).gold);
     pickups_.setMagnetMultiplier(m.magnetMultiplier);
-    flashlight_.setModifiers(m.batteryMultiplier * progression_->batteryMultiplier(), m.lightBonusDamage);
+    flashlight_.setModifiers(m.batteryMultiplier * progression_->batteryMultiplier() * c.battery,
+                             m.lightBonusDamage);
     flyingLanterns_.setCount(m.lanterns);
 }
 
@@ -817,7 +844,8 @@ void Game::rewardKill(const Enemy& enemy)
     hud_.pulseCombo();
 
     // Crochet onKill : Vampirisme, Explosion nécrotique, Fortune du mort.
-    if (m.lifeSteal > 0.0f) player_->heal(player_->maxHealth() * m.lifeSteal);
+    const float lifeSteal = m.lifeSteal + characterInfo(character_).lifeSteal;
+    if (lifeSteal > 0.0f) player_->heal(player_->maxHealth() * lifeSteal);
     if (chance(m.explosiveCorpseChance)) pendingExplosions_.push_back(enemy.hitCenter());
     if (m.deadMansFortune && multiplierBefore < kFortuneComboMultiplier &&
         economy_.comboMultiplier() >= kFortuneComboMultiplier) {

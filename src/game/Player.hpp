@@ -14,6 +14,8 @@ public:
     static constexpr float kBaseHealth = 100.0f;
 
     explicit Player(const AnimatedModel& model);
+    // Change de personnage (modèle partagé, possédé par Game) ; à appeler avant reset().
+    void setModel(const AnimatedModel& model);
 
     void reset(Vector3 spawn);
     // aimPoint : point du sol visé ; move : direction voulue (normalisée ou nulle).
@@ -54,16 +56,16 @@ private:
     void updateAnimation(float dt, float speed);
     Matrix bodyTransform() const;
 
-    const AnimatedModel& model_;
+    const AnimatedModel* model_ = nullptr;
     AnimationState anim_;
-    int clipIdle_;
-    int clipWalk_;
-    int clipSprint_;
-    int clipDie_;
-    int clipHold_;
-    int clipHoldShoot_;
-    int armRight_;
-    unsigned armsMask_;
+    int clipIdle_ = -1;
+    int clipWalk_ = -1;
+    int clipSprint_ = -1;
+    int clipDie_ = -1;
+    int clipHold_ = -1;
+    int clipHoldShoot_ = -1;
+    int armRight_ = -1;
+    unsigned armsMask_ = 0;
 
     Vector3 position_ = {0.0f, 0.0f, 0.0f};
     Vector3 velocity_ = {0.0f, 0.0f, 0.0f};

@@ -63,6 +63,12 @@ void Progression::load()
         const int mode = std::clamp(file_.getInt(key + "mode", 0), 0, static_cast<int>(GameMode::Count) - 1);
         leaderboard_.push_back({score, file_.getInt(key + "wave", 0), static_cast<GameMode>(mode)});
     }
+    for (int i = 1; i < static_cast<int>(CharacterId::Count); ++i) {
+        const CharacterInfo& c = characterInfo(static_cast<CharacterId>(i));
+        ownedCharacters_[static_cast<size_t>(i)] = file_.getInt(std::string("character.") + c.key, 0) != 0;
+    }
+    const int selected = std::clamp(file_.getInt("selected_character", 0), 0, static_cast<int>(CharacterId::Count) - 1);
+    if (owns(static_cast<CharacterId>(selected))) selected_ = static_cast<CharacterId>(selected);
 }
 
 void Progression::save()
@@ -82,7 +88,37 @@ void Progression::save()
         file_.setInt(key + "wave", leaderboard_[i].wave);
         file_.setInt(key + "mode", static_cast<int>(leaderboard_[i].mode));
     }
+    for (int i = 1; i < static_cast<int>(CharacterId::Count); ++i) {
+        const CharacterInfo& c = characterInfo(static_cast<CharacterId>(i));
+        file_.setInt(std::string("character.") + c.key, ownedCharacters_[static_cast<size_t>(i)] ? 1 : 0);
+    }
+    file_.setInt("selected_character", static_cast<int>(selected_));
     file_.save();
+}
+
+bool Progression::canBuy(CharacterId id) const
+{
+    return !owns(id) && bones_ >= characterInfo(id).cost;
+}
+
+bool Progression::buy(CharacterId id)
+{
+    if (!canBuy(id)) return false;
+    bones_ -= characterInfo(id).cost;
+    ownedCharacters_[static_cast<size_t>(id)] = true;
+    selected_ = id;
+    save();
+    return true;
+}
+
+bool Progression::select(CharacterId id)
+{
+    if (!owns(id)) return false;
+    if (selected_ != id) {
+        selected_ = id;
+        save();
+    }
+    return true;
 }
 
 int Progression::nextCost(TalentId id) const

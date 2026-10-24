@@ -67,6 +67,8 @@ private:
 
     void loadAudio();
     void startNewGame();
+    // Change le modèle du joueur si le personnage choisi au menu a changé.
+    void loadCharacter(CharacterId id);
     void update(float dt);
     void updatePlaying(float dt);
     Controls readControls() const;
@@ -122,7 +124,8 @@ private:
     // Les ressources GPU doivent être créées après InitWindow et libérées avant CloseWindow.
     std::unique_ptr<World> world_;
     std::unique_ptr<Zones> zones_; // référence world_ : détruit avant lui
-    std::unique_ptr<AnimatedModel> keeperModel_;
+    std::unique_ptr<AnimatedModel> playerModel_; // modèle du personnage joué
+    CharacterId character_ = CharacterId::Keeper;
     std::unique_ptr<AnimatedModel> merchantModel_;
     std::unique_ptr<Player> player_;
     std::unique_ptr<Merchant> merchant_; // nul si la carte n'en déclare pas
