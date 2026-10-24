@@ -37,6 +37,8 @@ constexpr Color kPlayerDamageColor = {255, 80, 80, 255};
 constexpr Color kWaveColor = {230, 200, 120, 255};
 constexpr Color kClearColor = {140, 230, 150, 255};
 constexpr Color kLevelColor = {90, 235, 200, 255};
+constexpr Color kGateColor = {255, 215, 120, 255};
+constexpr float kGateShake = 0.3f;
 
 // Sons de tir par arme (indices du catalogue d'Arsenal).
 const char* const kShotSounds[] = {"gun_pistol", "gun_shotgun", "gun_pistol", "gun_rifle"};
@@ -64,6 +66,9 @@ Game::Game(const Options& options)
     SetExitKey(KEY_NULL); // Échap sert à la pause, pas à quitter.
     HideCursor();         // remplacé par le réticule du HUD
 
+    const MapData map = loadMapFile(assetPath("maps/graveyard.txt"));
+    world_ = std::make_unique<World>(map);
+    zones_ = std::make_unique<Zones>(map, *world_);
     keeperModel_ = std::make_unique<AnimatedModel>(assetPath("models/graveyard/character-keeper.glb"));
     player_ = std::make_unique<Player>(*keeperModel_);
     waves_ = std::make_unique<WaveManager>();
@@ -76,10 +81,11 @@ Game::Game(const Options& options)
 
     startNewGame();
     if (options_.smokeFrames > 0) {
-        // Test automatique : directement en combat, face à une horde (le pilote automatique la fauche).
+        // Test automatique : directement en combat dans la cour, face à une horde
+        // (le pilote automatique la fauche).
         state_ = State::Playing;
-        waves_->spawnRing(Vector3Add(player_->position(), {0.0f, 0.0f, -8.0f}), 2.0f, 10, EnemyType::Walker);
-        waves_->spawnRing(Vector3Add(player_->position(), {0.0f, 0.0f, -14.0f}), 2.5f, 6, EnemyType::Runner);
+        waves_->spawnRing(Vector3Add(player_->position(), {0.0f, 0.0f, -4.5f}), 1.8f, 10, EnemyType::Walker);
+        waves_->spawnRing(Vector3Add(player_->position(), {-2.0f, 0.0f, 4.0f}), 1.5f, 6, EnemyType::Runner);
         // La mitraillette enchaîne les morts : la capture montre l'or au sol et un combo.
         arsenal_.unlock(kSmokeWeapon);
         arsenal_.addAmmo(kSmokeWeapon, kSmokeAmmo);
@@ -97,6 +103,8 @@ Game::~Game()
     waves_.reset();
     player_.reset();
     keeperModel_.reset();
+    zones_.reset();
+    world_.reset();
     CloseAudioDevice();
     CloseWindow();
 }
@@ -110,6 +118,8 @@ void Game::loadAudio()
     audio_.loadGroup("reload", {"reload_000.ogg", "reload_001.ogg", "reload_002.ogg"}, 2);
     audio_.loadGroup("hit_flesh", {"hit_flesh_000.ogg", "hit_flesh_001.ogg", "hit_flesh_002.ogg",
                                    "hit_flesh_003.ogg", "hit_flesh_004.ogg"}, 4);
+    audio_.loadGroup("hit_wood", {"hit_wood_000.ogg", "hit_wood_001.ogg", "hit_wood_002.ogg", "hit_wood_003.ogg",
+                                  "hit_wood_004.ogg"}, 4);
     audio_.loadGroup("hit_heavy", {"hit_heavy_000.ogg", "hit_heavy_001.ogg", "hit_heavy_002.ogg"}, 2);
     audio_.loadGroup("body_fall", {"body_fall_000.ogg", "body_fall_001.ogg", "body_fall_002.ogg"}, 4);
     audio_.loadGroup("zombie_groan", {"zombie_groan_0.ogg", "zombie_groan_1.ogg", "zombie_moan_0.ogg",
@@ -141,7 +151,8 @@ void Game::run()
 
 void Game::startNewGame()
 {
-    player_->reset({0.0f, 0.0f, 0.0f});
+    player_->reset(world_->playerSpawn());
+    zones_->reset();
     arsenal_.reset();
     waves_->reset();
     projectiles_.clear();
@@ -173,6 +184,7 @@ Game::Controls Game::readControls() const
     c.fireHeld = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     c.firePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     c.reload = IsKeyPressed(KEY_R);
+    c.interact = IsKeyPressed(KEY_E);
     for (int i = 0; i < 4; ++i) {
         if (IsKeyPressed(KEY_ONE + i)) c.selectWeapon = i;
     }
@@ -259,7 +271,7 @@ void Game::updatePlaying(float dt)
         waves_->skipIntermission();
     }
 
-    player_->update(dt, world_, c.aim, alive ? c.move : Vector3{0.0f, 0.0f, 0.0f}, c.sprint);
+    player_->update(dt, *world_, c.aim, alive ? c.move : Vector3{0.0f, 0.0f, 0.0f}, c.sprint);
     if (alive) {
         if (c.selectWeapon >= 0) arsenal_.select(c.selectWeapon);
         if (c.cycleWeapon != 0) arsenal_.cycle(c.cycleWeapon);
@@ -270,12 +282,14 @@ void Game::updatePlaying(float dt)
         }
     }
 
+    if (alive && c.interact) zones_->tryOpenNearest(player_->position(), economy_, events_);
+    zones_->update(dt);
+
     projectiles_.update(dt);
-    const float damage = waves_->update(dt, player_->position(), world_, events_);
+    const float damage = waves_->update(dt, player_->position(), *world_, *zones_, events_);
     resolveProjectiles();
     economy_.update(dt);
     pickups_.update(dt, player_->position(), economy_, events_);
-    resolveWallImpacts();
     particles_->update(dt);
     if (alive && c.sprint && Vector3Length(c.move) > 0.0f && player_->stamina() > 0.0f) {
         particles_->sprintDust(player_->position(), c.move, dt);
@@ -315,6 +329,11 @@ void Game::resolveProjectiles()
 {
     for (Projectile& p : projectiles_.projectiles()) {
         if (!p.alive) continue;
+        // Le décor arrête la balle : seuls les morts touchés avant l'obstacle comptent.
+        Vector3 impact = p.position;
+        const bool blocked = world_->segmentBlocked(p.previous, p.position, impact);
+        const float travel = Vector3Distance(p.previous, p.position);
+        const float wallT = blocked && travel > 0.0f ? Vector3Distance(p.previous, impact) / travel : 1.0f;
         for (Enemy& e : waves_->enemies()) {
             if (!e.isAlive() || e.id() == p.lastHit) continue;
             // Les balles volent à hauteur de la main : on teste dans le plan du torse.
@@ -322,7 +341,7 @@ void Game::resolveProjectiles()
             const Vector3 a = {p.previous.x, center.y, p.previous.z};
             const Vector3 b = {p.position.x, center.y, p.position.z};
             float t = 0.0f;
-            if (!segmentHitsSphere(a, b, center, e.radius(), t)) continue;
+            if (!segmentHitsSphere(a, b, center, e.radius(), t) || t > wallT) continue;
             if (e.hit(p.damage, p.velocity, p.knockback, events_)) rewardKill(e);
             p.lastHit = e.id();
             if (p.pierce > 0) {
@@ -332,6 +351,10 @@ void Game::resolveProjectiles()
                 break;
             }
         }
+        if (p.alive && blocked) {
+            p.alive = false;
+            events_.push_back({EventType::BulletImpact, impact, 0.0f, Vector3Normalize(p.velocity)});
+        }
     }
 }
 
@@ -340,30 +363,6 @@ void Game::rewardKill(const Enemy& enemy)
     const Economy::Reward reward = economy_.addKill(enemy.type());
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     hud_.pulseCombo();
-}
-
-void Game::resolveWallImpacts()
-{
-    const float wall = World::kHalfSize;
-    for (Projectile& p : projectiles_.projectiles()) {
-        if (!p.alive || (std::fabs(p.position.x) <= wall && std::fabs(p.position.z) <= wall)) continue;
-        p.alive = false;
-        // Premier mur franchi le long du segment parcouru pendant l'image.
-        float t = 1.0f;
-        Vector3 normal = {0.0f, 0.0f, 0.0f};
-        const auto crossing = [&](float from, float to, Vector3 axis) {
-            if (std::fabs(to) <= wall || std::fabs(from) > wall) return;
-            const float side = to > 0.0f ? 1.0f : -1.0f;
-            const float s = (side * wall - from) / (to - from);
-            if (s < t) {
-                t = s;
-                normal = Vector3Scale(axis, -side);
-            }
-        };
-        crossing(p.previous.x, p.position.x, {1.0f, 0.0f, 0.0f});
-        crossing(p.previous.z, p.position.z, {0.0f, 0.0f, 1.0f});
-        if (Vector3Length(normal) > 0.0f) particles_->impact(Vector3Lerp(p.previous, p.position, t), normal);
-    }
 }
 
 void Game::handleEvents()
@@ -437,6 +436,15 @@ void Game::handleEvents()
             audio_.play("ui_confirm", 0.8f, 0.0f);
             hud_.announce(TextFormat("NIVEAU %d !", static_cast<int>(ev.value)), "Une carte t'attend...", kLevelColor);
             break;
+        case EventType::GateOpened:
+            audio_.playAt("hit_heavy", ev.position, 0.9f, 0.0f);
+            cameraRig_.shake(kGateShake);
+            hud_.announce("GRILLE OUVERTE", zones_->zoneName(static_cast<int>(ev.value)), kGateColor);
+            break;
+        case EventType::BulletImpact:
+            particles_->impact(ev.position, Vector3Negate(ev.direction));
+            audio_.playAt("hit_wood", ev.position, 0.3f, 0.15f);
+            break;
         }
     }
     events_.clear();
@@ -502,6 +510,9 @@ void Game::draw() const
         drawWorld();
         postFx_->end();
         postFx_->draw();
+        if (state_ == State::Playing && !player_->isDead()) {
+            zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
+        }
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Paused) drawPauseOverlay();
         if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
@@ -515,7 +526,8 @@ void Game::draw() const
 void Game::drawWorld() const
 {
     BeginMode3D(cameraRig_.camera());
-    world_.draw();
+    world_->draw(cameraRig_.camera());
+    zones_->draw();
     waves_->draw();
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
     projectiles_.draw();
@@ -534,7 +546,7 @@ void Game::drawMenu() const
     DrawText(tagline, (w - MeasureText(tagline, 22)) / 2, h / 4 + 110, 22, {180, 170, 150, 255});
     const char* hint = "Entree pour commencer";
     DrawText(hint, (w - MeasureText(hint, 28)) / 2, h / 2 + 20, 28, RAYWHITE);
-    const char* controls = "ZQSD : bouger   Maj : sprint   Souris : viser / tirer   R : recharger   1-4 : armes";
+    const char* controls = "ZQSD : bouger   Maj : sprint   Souris : viser / tirer   R : recharger   1-4 : armes   E : grille";
     DrawText(controls, (w - MeasureText(controls, 18)) / 2, h - 60, 18, {140, 135, 125, 255});
     DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
 }

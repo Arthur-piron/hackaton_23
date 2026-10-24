@@ -1,0 +1,265 @@
+# LAST LIGHT - carte du cimetiere
+#
+# Unites : 1 = 1 m. X vers la droite de l'ecran, Z vers le bas (vers la camera).
+# Modeles relatifs a assets/models/. Echelle = multiplicateur de kKenneyScale (x2) :
+# le Survival Kit est deux fois plus petit que le Graveyard Kit, on l'utilise a 2.
+# Collision : -  (aucune), solid (boite englobante), trunk (tronc d'arbre).
+#
+#   player  x z
+#   prop    <modele> x z rotY echelle collision [y]
+#   row     <modele> x1 z1 x2 z2 nombre rotY echelle collision   (alignes, extremites comprises)
+#   scatter <modele> minX minZ maxX maxZ nombre echelle collision graine   (rotation aleatoire)
+#   wall    <modele> x1 z1 x2 z2 [echelle]   (pieces de murs centrees sur le segment, toujours solides)
+#   zone    <id> <prix> minX minZ maxX maxZ <nom affiche, sans accents>
+#   gate    <zone> x z rotY   (portail centre sur un trou de 4 m dans le mur, passage de 3 m ; rotY 0 : le long de X, 90 : le long de Z)
+#   spawn   <zone> x z        (point d'apparition des morts, actif quand la zone est ouverte)
+#
+#                     Mausolee  x[-8,8]   z[-38,-26]
+#   Chapelle x[-30,-14] | Allee x[-14,14] z[-26,-8] | Crypte x[14,30]
+#                     Cour      x[-8,8]   z[-8,6]   (depart)
+
+player 0 -1
+
+zone court    0    -8  -8   8   6  Cour du gardien
+zone alley    500  -14 -26  14 -8  Allee des tombes
+zone chapel   1000 -30 -26 -14 -8  Chapelle
+zone crypt    1250  14 -26  30 -8  Crypte
+zone mausoleum 1500 -8 -38   8 -26 Mausolee
+
+gate alley     0  -8   0
+gate chapel  -14 -17  90
+gate crypt    14 -17  90
+gate mausoleum 0 -26   0
+
+# Une seule entree pour les morts dans la cour (breche du mur ouest), deux dans l'allee...
+spawn court     -6.8 -1
+spawn alley    -12.5 -24.5
+spawn alley     12.5 -24.5
+spawn chapel   -28.5 -24.5
+spawn chapel   -28.5  -9.5
+spawn crypt     28.5 -24.5
+spawn crypt     28.5  -9.5
+spawn mausoleum -6.5 -36.5
+spawn mausoleum  6.5 -36.5
+
+# ---------------------------------------------------------------- Murs
+# Cour
+wall graveyard/stone-wall.glb -8 6 8 6
+wall graveyard/stone-wall.glb -8 -8 -8 -2
+wall graveyard/stone-wall-damaged.glb -8 -2 -8 0
+wall graveyard/stone-wall.glb -8 0 -8 6
+wall graveyard/stone-wall.glb 8 -8 8 6
+wall graveyard/iron-fence-border.glb -8 -8 -2 -8
+wall graveyard/iron-fence-border.glb 2 -8 8 -8
+# Allee
+wall graveyard/stone-wall.glb -14 -8 -8 -8
+wall graveyard/stone-wall.glb 8 -8 14 -8
+wall graveyard/stone-wall.glb -14 -26 -12 -26
+wall graveyard/stone-wall-damaged.glb -12 -26 -10 -26
+wall graveyard/stone-wall.glb -10 -26 -8 -26
+wall graveyard/stone-wall.glb 8 -26 10 -26
+wall graveyard/stone-wall-damaged.glb 10 -26 12 -26
+wall graveyard/stone-wall.glb 12 -26 14 -26
+wall graveyard/iron-fence-border.glb -8 -26 -2 -26
+wall graveyard/iron-fence-border.glb 2 -26 8 -26
+wall graveyard/iron-fence-border.glb -14 -26 -14 -19
+wall graveyard/iron-fence-border.glb -14 -15 -14 -8
+wall graveyard/iron-fence-border.glb 14 -26 14 -19
+wall graveyard/iron-fence-border.glb 14 -15 14 -8
+# Chapelle
+wall graveyard/stone-wall.glb -30 -26 -14 -26
+wall graveyard/stone-wall.glb -30 -8 -14 -8
+wall graveyard/stone-wall.glb -30 -26 -30 -8
+# Crypte
+wall graveyard/stone-wall.glb 14 -26 30 -26
+wall graveyard/stone-wall.glb 14 -8 30 -8
+wall graveyard/stone-wall.glb 30 -26 30 -8
+# Mausolee
+wall graveyard/stone-wall.glb -8 -38 8 -38
+wall graveyard/stone-wall.glb -8 -38 -8 -26
+wall graveyard/stone-wall.glb 8 -38 8 -26
+
+# Piliers aux angles
+prop graveyard/pillar-square.glb -8 6 0 1 solid
+prop graveyard/pillar-square.glb 8 6 0 1 solid
+prop graveyard/pillar-square.glb -14 -8 0 1 solid
+prop graveyard/pillar-square.glb 14 -8 0 1 solid
+prop graveyard/pillar-square.glb -8 -8 0 1 solid
+prop graveyard/pillar-square.glb 8 -8 0 1 solid
+prop graveyard/pillar-square.glb -30 -8 0 1 solid
+prop graveyard/pillar-square.glb 30 -8 0 1 solid
+prop graveyard/pillar-square.glb -30 -26 0 1 solid
+prop graveyard/pillar-square.glb 30 -26 0 1 solid
+prop graveyard/pillar-square.glb -14 -26 0 1 solid
+prop graveyard/pillar-square.glb 14 -26 0 1 solid
+prop graveyard/pillar-square.glb -8 -26 0 1 solid
+prop graveyard/pillar-square.glb 8 -26 0 1 solid
+prop graveyard/pillar-square.glb -8 -38 0 1 solid
+prop graveyard/pillar-square.glb 8 -38 0 1 solid
+
+# ---------------------------------------------------------------- Cour du gardien
+# Allee pavee de la grille au centre
+row graveyard/road.glb -0.8 -7.2 -0.8 -3.2 3 0 1 -
+row graveyard/road.glb 0.8 -7.2 0.8 -3.2 3 0 1 -
+# Cabane du gardien (Survival Kit) dans l'angle nord-est : 2 x 2 cases de 2 m, porte au sud
+prop survival/structure-metal-wall.glb 4.5 -6.5 0 2 solid
+prop survival/structure-metal-wall.glb 6.5 -6.5 0 2 solid
+prop survival/structure-metal-wall.glb 4.5 -6.5 90 2 solid
+prop survival/structure-metal-wall.glb 4.5 -4.5 90 2 solid
+prop survival/structure-metal-wall.glb 6.5 -6.5 -90 2 solid
+prop survival/structure-metal-wall.glb 6.5 -4.5 -90 2 solid
+prop survival/structure-metal-doorway.glb 4.5 -4.5 180 2 solid
+prop survival/structure-metal-wall.glb 6.5 -4.5 180 2 solid
+prop survival/structure-metal-roof.glb 4.5 -6.5 0 2 solid 2
+prop survival/structure-metal-roof.glb 6.5 -6.5 0 2 solid 2
+prop survival/structure-metal-roof.glb 4.5 -4.5 0 2 solid 2
+prop survival/structure-metal-roof.glb 6.5 -4.5 0 2 solid 2
+# Abords de la cabane
+prop survival/barrel.glb 7.0 -2.9 0 1.4 solid
+prop survival/barrel-open.glb 6.2 -2.8 40 1.4 solid
+prop survival/chest.glb 3.0 -3.1 -20 1.4 solid
+prop survival/box-large.glb 2.9 -6.6 90 1.4 solid
+prop survival/box.glb 2.9 -5.5 10 1.4 solid
+prop graveyard/fire-basket.glb 3.2 -1.6 0 1.4 solid
+# Coin atelier au sud-ouest
+prop survival/workbench.glb -5.6 4.6 0 1.6 solid
+prop survival/resource-planks.glb -4.2 4.8 80 1.6 -
+prop survival/box-large-open.glb -6.9 3.2 0 1.4 solid
+# Deux lampadaires : un a la grille, un devant la cabane
+prop graveyard/lightpost-single.glb -3.2 -7.0 0 1.2 solid
+prop graveyard/lightpost-single.glb 7.0 -1.4 0 1.2 solid
+# Fosse en cours de creusage, feu de camp, foin, citrouilles
+prop graveyard/grave.glb -4.4 1.0 0 1 -
+prop graveyard/shovel-dirt.glb -3.2 0.4 30 1 solid
+prop survival/campfire-pit.glb 2.6 3.2 0 2 -
+prop graveyard/bench.glb 4.4 3.2 -90 1 solid
+prop graveyard/hay-bale.glb -6.6 -5.8 20 1 solid
+prop graveyard/hay-bale-bundled.glb -6.6 -4.6 -10 1 solid
+prop graveyard/pumpkin-carved.glb -5.4 -6.6 10 1 -
+prop graveyard/pumpkin.glb -1.8 5.0 0 1 -
+prop graveyard/pumpkin-tall-carved.glb -1.0 5.3 -20 1 -
+prop graveyard/pine-crooked.glb 6.8 4.8 30 1.2 trunk
+# Breche par laquelle entrent les morts
+prop graveyard/debris.glb -7.0 -1.6 0 1.2 -
+prop graveyard/gravestone-debris.glb -6.9 0.2 60 1 -
+
+# ---------------------------------------------------------------- Allee des tombes
+row graveyard/road.glb -0.8 -8.8 -0.8 -25.2 11 0 1 -
+row graveyard/road.glb 0.8 -8.8 0.8 -25.2 11 0 1 -
+row graveyard/road.glb -13.2 -16.2 -2.4 -16.2 7 0 1 -
+row graveyard/road.glb -13.2 -17.8 -2.4 -17.8 7 0 1 -
+row graveyard/road.glb 2.4 -16.2 13.2 -16.2 7 0 1 -
+row graveyard/road.glb 2.4 -17.8 13.2 -17.8 7 0 1 -
+# Rangee sud-ouest
+prop graveyard/gravestone-cross.glb -11.5 -13.4 0 1 solid
+prop graveyard/gravestone-round.glb -9 -13.4 0 1 solid
+prop graveyard/gravestone-decorative.glb -6.5 -13.4 0 1 solid
+prop graveyard/gravestone-bevel.glb -4 -13.4 0 1 solid
+row graveyard/grave.glb -11.5 -12 -4 -12 4 0 1 -
+# Rangee sud-est
+prop graveyard/gravestone-roof.glb 4 -13.4 0 1 solid
+prop graveyard/gravestone-broken.glb 6.5 -13.4 0 1 solid
+prop graveyard/gravestone-wide.glb 9 -13.4 0 1 solid
+prop graveyard/gravestone-cross-large.glb 11.5 -13.4 0 1 solid
+row graveyard/grave.glb 4 -12 11.5 -12 4 0 1 -
+# Rangee nord-ouest
+prop graveyard/gravestone-wide.glb -9 -22.4 0 1 solid
+prop graveyard/gravestone-cross-large.glb -6.5 -22.4 0 1 solid
+prop graveyard/gravestone-round.glb -4 -22.4 0 1 solid
+row graveyard/grave-border.glb -9 -20.9 -4 -20.9 3 0 1 -
+prop graveyard/gravestone-debris.glb -11.6 -21.6 20 1 -
+# Rangee nord-est
+prop graveyard/gravestone-bevel.glb 4 -22.4 0 1 solid
+prop graveyard/gravestone-decorative.glb 6.5 -22.4 0 1 solid
+prop graveyard/gravestone-cross.glb 9 -22.4 0 1 solid
+row graveyard/grave-border.glb 4 -20.9 9 -20.9 3 0 1 -
+prop graveyard/gravestone-broken.glb 11.6 -21.8 -30 1 -
+# Arbres, bougies, details
+prop graveyard/pine.glb -12.4 -10 0 1.4 trunk
+prop graveyard/pine-crooked.glb 12.4 -10 0 1.4 trunk
+prop graveyard/pine-crooked.glb -12.6 -20.2 0 1.2 trunk
+prop graveyard/pine.glb 12.6 -20.2 0 1.2 trunk
+prop graveyard/candle-multiple.glb -6.5 -12.6 0 1 -
+prop graveyard/candle.glb 9.4 -12.6 0 1 -
+prop graveyard/lantern-candle.glb -2.4 -9.2 0 1 -
+prop graveyard/lantern-candle.glb 2.4 -9.2 0 1 -
+prop graveyard/lantern-candle.glb -2.4 -24.8 0 1 -
+prop graveyard/lantern-candle.glb 2.4 -24.8 0 1 -
+prop graveyard/pumpkin-tall.glb 4.6 -21.2 0 1 -
+prop graveyard/urn-round.glb -3.4 -21 0 1 -
+prop graveyard/rocks.glb 13 -24.6 0 1 -
+prop graveyard/trunk.glb -7.6 -24.8 0 1 solid
+
+# ---------------------------------------------------------------- Chapelle
+prop graveyard/crypt-large.glb -25 -17 90 2 solid
+prop graveyard/crypt-large-roof.glb -25 -17 90 2 - 4
+prop graveyard/crypt-large-door.glb -20.2 -17 90 2 -
+prop graveyard/altar-stone.glb -18 -17 90 1 solid
+prop graveyard/candle-multiple.glb -18.2 -18.4 0 1 -
+prop graveyard/candle-multiple.glb -18.2 -15.6 0 1 -
+prop graveyard/cross-column.glb -19.4 -21.8 0 1 solid
+prop graveyard/cross-column.glb -19.4 -12.2 0 1 solid
+prop graveyard/bench.glb -17.6 -22.4 0 1 solid
+prop graveyard/bench.glb -17.6 -11.6 0 1 solid
+prop graveyard/pillar-obelisk.glb -27.8 -22.6 0 1 solid
+prop graveyard/pillar-obelisk.glb -27.8 -11.4 0 1 solid
+prop graveyard/lightpost-double.glb -21.6 -24.6 0 1.2 solid
+prop graveyard/lightpost-double.glb -21.6 -9.4 0 1.2 solid
+prop graveyard/pine-crooked.glb -24 -24.4 0 1.2 trunk
+prop graveyard/pine.glb -24 -9.6 0 1.2 trunk
+
+# ---------------------------------------------------------------- Crypte
+prop graveyard/crypt-small.glb 26.4 -12.4 -90 1.5 solid
+prop graveyard/crypt-small-roof.glb 26.4 -12.4 -90 1.5 - 3
+prop graveyard/crypt-small.glb 26.4 -21.6 -90 1.5 solid
+prop graveyard/crypt-small-roof.glb 26.4 -21.6 -90 1.5 - 3
+prop graveyard/crypt-a.glb 18.6 -12 0 1 solid
+prop graveyard/crypt-b.glb 21.4 -12 0 1 solid
+prop graveyard/crypt-a.glb 18.6 -22 0 1 solid
+prop graveyard/crypt.glb 21.4 -22 0 1 solid
+prop graveyard/coffin.glb 22.6 -17 90 1 solid
+prop graveyard/coffin-old.glb 26 -17 80 1 -
+prop graveyard/coffin-old.glb 19.4 -9.6 10 1 -
+prop graveyard/urn-square.glb 24 -10 0 1 -
+prop graveyard/urn-round.glb 24 -24 0 1 -
+prop graveyard/fire-basket.glb 24 -14.6 0 1.4 solid
+prop graveyard/fire-basket.glb 24 -19.4 0 1.4 solid
+prop graveyard/debris.glb 17 -24.2 30 1 -
+prop graveyard/rocks-tall.glb 28.4 -17 0 1 solid
+prop graveyard/gravestone-debris.glb 16.6 -10 -40 1 -
+
+# ---------------------------------------------------------------- Mausolee
+prop graveyard/crypt-large.glb 0 -33.4 0 1.6 solid
+prop graveyard/crypt-large-roof.glb 0 -33.4 0 1.6 - 3.2
+prop graveyard/crypt-large-door.glb 0 -29.6 0 1.6 -
+prop graveyard/pillar-obelisk.glb -4.6 -29 0 1.2 solid
+prop graveyard/pillar-obelisk.glb 4.6 -29 0 1.2 solid
+prop graveyard/pillar-obelisk.glb -4.6 -35.8 0 1.2 solid
+prop graveyard/pillar-obelisk.glb 4.6 -35.8 0 1.2 solid
+prop graveyard/lantern-glass.glb -1.6 -28.4 0 1 -
+prop graveyard/lantern-glass.glb 1.6 -28.4 0 1 -
+prop graveyard/urn-round.glb -6.6 -28 0 1 -
+prop graveyard/urn-square.glb 6.6 -28 0 1 -
+
+# ---------------------------------------------------------------- Exterieur : foret et rochers
+scatter graveyard/pine.glb -48 -54 -32 22 40 1.6 - 11
+scatter graveyard/pine-crooked.glb -48 -54 -32 22 20 1.6 - 12
+scatter graveyard/pine.glb 32 -54 48 22 40 1.6 - 13
+scatter graveyard/pine-crooked.glb 32 -54 48 22 20 1.6 - 14
+scatter graveyard/pine.glb -32 -54 32 -40 30 1.6 - 15
+scatter graveyard/pine-crooked.glb -32 -54 32 -40 12 1.6 - 16
+scatter graveyard/pine.glb -32 8 32 22 26 1.6 - 17
+scatter graveyard/pine.glb -31 -6.5 -9.6 6 14 1.5 - 18
+scatter graveyard/pine.glb 9.6 -6.5 31 6 14 1.5 - 19
+scatter graveyard/pine.glb -31 -39 -9.6 -27.5 14 1.5 - 20
+scatter graveyard/pine.glb 9.6 -39 31 -27.5 14 1.5 - 21
+scatter graveyard/rocks.glb -31 -6.5 -9.6 6 6 1 - 22
+scatter graveyard/rocks.glb 9.6 -6.5 31 6 6 1 - 23
+scatter graveyard/trunk.glb -12 8 12 12 4 1 - 24
+
+# Touffes d'herbe dans les zones
+scatter survival/grass.glb -7 -7 7 5 14 1.2 - 31
+scatter survival/grass.glb -13 -25 13 -9 30 1.2 - 32
+scatter survival/grass.glb -29 -25 -15 -9 14 1.2 - 33
+scatter survival/grass.glb 15 -25 29 -9 14 1.2 - 34
+scatter survival/grass.glb -7 -37 7 -27 10 1.2 - 35
