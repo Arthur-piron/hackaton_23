@@ -19,6 +19,8 @@ const StructureInfo kCatalog[] = {
     {"Mine", BuildCategory::Traps, 1, 1, 0, 4, 50, 1.0f, 0u, "blaster/grenade-b.glb", WHITE, 1},
     {"Flaque d'huile", BuildCategory::Traps, 3, 3, 0, 2, 30, 1.0f, 0u, nullptr, WHITE, 1},
     {"Piège à ours", BuildCategory::Traps, 1, 1, 2, 3, 0, 1.0f, 0u, nullptr, WHITE, 10},
+    {"Arbalète", BuildCategory::Turrets, 1, 1, 8, 6, 150, 300.0f, kBlocksAll, "tower/tower-square-bottom-a.glb", WHITE,
+     0},
 };
 static_assert(sizeof(kCatalog) / sizeof(kCatalog[0]) == static_cast<size_t>(StructureKind::Count),
               "une entrée de catalogue par structure");
@@ -112,6 +114,7 @@ int Structures::place(StructureKind kind, Vector3 center, bool rotated)
     item.health = info(kind).health;
     item.open = 0.0f;
     item.trap = TrapState{};
+    item.turret = TurretState{};
     item.trap.uses = info(kind).uses;
     const BoundingBox box = footprint(kind, center, rotated);
     if (item.blocker < 0) {

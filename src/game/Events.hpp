@@ -44,6 +44,7 @@ enum class EventType {
     StructureDamaged,   // un mort frappe une structure ; value = StructureKind
     StructureDestroyed, // value = StructureKind
     TrapTriggered,      // value = StructureKind (pics, mine qui bipe, flaque qui s'enflamme, piège à ours)
+    TurretFired,        // value = StructureKind ; direction = sens du tir
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

@@ -2,6 +2,7 @@
 
 #include "core/Fonts.hpp"
 #include "game/Traps.hpp"
+#include "game/Turrets.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
 #include "raymath.h"
@@ -154,6 +155,10 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
     refusal_ = list.empty() ? std::string("Bientôt disponible") : checkPlacement(ghost_, around, economy);
     if (refusal_.empty() && category_ == BuildCategory::Traps && structures.countIn(BuildCategory::Traps) >= Traps::kMaxTraps) {
         refusal_ = TextFormat("Au plus %d pièges", Traps::kMaxTraps);
+    }
+    const int turretLimit = Turrets::limit(static_cast<int>(around.zones.openAreas().size()));
+    if (refusal_.empty() && category_ == BuildCategory::Turrets && structures.countIn(BuildCategory::Turrets) >= turretLimit) {
+        refusal_ = TextFormat("Au plus %d tourelles (ouvre d'autres zones)", turretLimit);
     }
 
     if (IsKeyPressed(KEY_X)) sell(structures, economy, events);
