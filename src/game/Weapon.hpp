@@ -5,6 +5,7 @@
 #include "game/Projectile.hpp"
 #include "raylib.h"
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -24,12 +25,20 @@ struct WeaponStats {
     int pierce = 0;
     bool automatic = false;   // tir continu bouton maintenu
     bool infiniteReserve = false;
+    int reserveMagazines = 0; // réserve maximale, en nombre de chargeurs
 };
+
+// Améliorations achetées chez le marchand, propres à chaque arme.
+enum class WeaponUpgrade { Damage, FireRate, Magazine, Count };
 
 // Arsenal du joueur : armes, munitions, cadence, rechargement.
 class Arsenal {
 public:
+    static constexpr int kMaxUpgradeLevel = 3;
+
     static const std::vector<WeaponStats>& catalog();
+    // Multiplicateur apporté par une amélioration à un niveau donné (1 au niveau 0).
+    static float upgradeMultiplier(WeaponUpgrade upgrade, int level);
 
     Arsenal();
     void reset();
@@ -40,8 +49,13 @@ public:
     void select(int index);
     void cycle(int direction);
     void addAmmo(int weapon, int amount);
+    // Débloque une arme, chargeur plein et réserve au maximum.
     void unlock(int weapon);
-    // Bonus des cartes, appliqués à toutes les armes.
+    // Remplit la réserve d'une arme à son maximum.
+    void refillReserve(int weapon);
+    // Monte une amélioration d'un niveau (le chargeur reçoit aussitôt les balles en plus).
+    void upgrade(int weapon, WeaponUpgrade upgrade);
+    // Bonus des cartes, appliqués à toutes les armes ; ils se multiplient aux améliorations.
     void setModifiers(const CardModifiers& modifiers) { modifiers_ = modifiers; }
 
     int current() const { return current_; }
@@ -56,16 +70,31 @@ public:
     // Temps écoulé depuis le dernier tir (pour l'animation de recul).
     float timeSinceShot() const { return timeSinceShot_; }
 
+    // Statistiques effectives d'une arme : cartes et améliorations comprises.
+    float damageOf(int weapon) const;
+    float fireIntervalOf(int weapon) const;
+    int magazineOf(int weapon) const;
+    int reserveOf(int weapon) const { return slots_[static_cast<size_t>(weapon)].reserve; }
+    int maxReserveOf(int weapon) const;
+    int upgradeLevel(int weapon, WeaponUpgrade upgrade) const
+    {
+        return slots_[static_cast<size_t>(weapon)].upgrades[static_cast<size_t>(upgrade)];
+    }
+
 private:
     struct Slot {
         bool unlocked = false;
         int magazine = 0;
         int reserve = 0;
+        std::array<int, static_cast<size_t>(WeaponUpgrade::Count)> upgrades{};
     };
 
     void startReload(EventQueue& events, Vector3 position);
     float reloadTime() const { return stats().reloadTime * modifiers_.reloadMultiplier; }
-    int magazineOf(int weapon) const;
+    float upgradeOf(int weapon, WeaponUpgrade upgrade) const
+    {
+        return upgradeMultiplier(upgrade, upgradeLevel(weapon, upgrade));
+    }
 
     CardModifiers modifiers_;
     std::vector<Slot> slots_;

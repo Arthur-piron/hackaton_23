@@ -34,6 +34,9 @@ constexpr float kPlayerBloodHeight = 1.1f;
 // En --smoke, une montée de niveau est forcée à cette distance de la fin : la capture montre les cartes.
 constexpr int kSmokeShowcaseFrames = 80;
 
+// Marchand : la pause entre vagues est figée tant que l'écran est ouvert, dans cette limite.
+constexpr float kShopMaxFrozen = 45.0f;
+
 // Cartes
 constexpr float kLevelUpSlowMo = 0.4f;     // durée réelle du ralenti avant l'écran des cartes
 constexpr float kSlowMoScale = 0.25f;
@@ -154,6 +157,12 @@ Game::Game(const Options& options)
     waves_->setShader(lighting_->shader());
     lighting_->apply(keeperModel_->model());
     for (Model& model : weaponModels_) lighting_->apply(model);
+    shop_ = std::make_unique<Shop>(economy_, arsenal_, *player_);
+    if (!map.merchants.empty()) {
+        merchantModel_ = std::make_unique<AnimatedModel>(assetPath("models/graveyard/character-vampire.glb"));
+        lighting_->apply(merchantModel_->model());
+        merchant_ = std::make_unique<Merchant>(*merchantModel_, map.merchants.front());
+    }
     loadAudio();
 
     startNewGame();
@@ -184,6 +193,9 @@ Game::~Game()
     postFx_.reset();
     particles_.reset();
     waves_.reset();
+    shop_.reset();
+    merchant_.reset();
+    merchantModel_.reset();
     player_.reset();
     keeperModel_.reset();
     zones_.reset();
@@ -334,6 +346,9 @@ void Game::update(float dt)
     case State::LevelUp:
         updateLevelUp(dt);
         break;
+    case State::Shop:
+        updateShop(dt);
+        break;
     case State::Paused:
         if (IsKeyPressed(KEY_ESCAPE)) state_ = State::Playing;
         if (IsKeyPressed(KEY_Q) && IsKeyDown(KEY_LEFT_CONTROL)) {
@@ -411,7 +426,20 @@ void Game::updatePlaying(float dt)
         }
     }
 
-    if (alive && c.interact) zones_->tryOpenNearest(player_->position(), economy_, events_);
+    const bool intermission = waves_->phase() == WaveManager::Phase::Intermission;
+    if (merchant_) merchant_->update(dt, player_->position());
+    if (alive && c.interact) {
+        // Le marchand passe avant les grilles quand il est à portée.
+        if (merchant_ && merchant_->inReach(player_->position())) {
+            if (intermission) {
+                openShop();
+                return;
+            }
+            hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
+        } else {
+            zones_->tryOpenNearest(player_->position(), economy_, events_);
+        }
+    }
     zones_->update(dt);
 
     projectiles_.update(dt);
@@ -634,6 +662,30 @@ void Game::applyCardModifiers()
     pickups_.setMagnetMultiplier(m.magnetMultiplier);
 }
 
+void Game::openShop()
+{
+    shopScreen_.open(arsenal_.current(), economy_.gold());
+    shopFrozenLeft_ = kShopMaxFrozen;
+    audio_.play("ui_click", 0.8f, 0.0f);
+    state_ = State::Shop;
+}
+
+void Game::updateShop(float dt)
+{
+    audio_.setListener(player_->position());
+    shopFrozenLeft_ -= dt;
+    const ShopScreen::Result result = shopScreen_.update(dt, *shop_, arsenal_, economy_.gold());
+    if (result.moved) audio_.play("ui_click", 0.35f, 0.1f);
+    if (result.purchase >= 0) {
+        const int weapon = shopScreen_.upgradeWeapon();
+        const ShopOffer offer = shop_->offer(result.purchase, weapon);
+        const bool bought = shop_->buy(result.purchase, weapon, events_);
+        shopScreen_.notifyPurchase(bought, bought ? "Merci, gardien." : Shop::refusalReason(offer));
+        audio_.play(bought ? "ui_confirm" : "dry_fire", 0.7f, 0.0f);
+    }
+    if (result.close || shopFrozenLeft_ <= 0.0f || IsKeyPressed(KEY_ESCAPE)) state_ = State::Playing;
+}
+
 void Game::openCardPicker()
 {
     if (player_->isDead()) return;
@@ -654,6 +706,13 @@ void Game::updateLevelUp(float dt)
     // --smoke : le pilote automatique prend la première carte, sauf pour la capture finale.
     const bool showcase = frameCount_ >= options_.smokeFrames - kSmokeShowcaseFrames;
     if (options_.smokeFrames > 0 && !showcase && cardPicker_.isSettled()) cardPicker_.choose(0);
+
+    // Relance achetée chez le marchand : trois nouvelles cartes.
+    if (IsKeyPressed(KEY_R) && economy_.useCardReroll()) {
+        audio_.play("ui_confirm", 0.6f, 0.0f);
+        openCardPicker();
+        return;
+    }
 
     const CardPicker::Result result = cardPicker_.update(dt);
     if (result.hoverChanged) audio_.play("ui_click", 0.35f, 0.1f);
@@ -768,6 +827,10 @@ void Game::handleEvents()
         case EventType::XpPicked:
             audio_.play("pickup", 0.25f, 0.1f);
             break;
+        case EventType::ItemBought:
+            hud_.pulseGold();
+            applyCardModifiers(); // une arme achetée ou améliorée doit recevoir les bonus des cartes
+            break;
         case EventType::LevelUp:
             audio_.play("ui_confirm", 0.8f, 0.0f);
             hud_.announce(TextFormat("NIVEAU %d !", static_cast<int>(ev.value)), "Une carte t'attend...", kLevelColor);
@@ -863,11 +926,16 @@ void Game::draw() const
         drawWorld();
         postFx_->end();
         postFx_->draw();
+        const bool intermission = waves_->phase() == WaveManager::Phase::Intermission;
         if (state_ == State::Playing && !player_->isDead()) {
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
+            if (merchant_) merchant_->drawPrompt(cameraRig_.camera(), player_->position(), intermission);
         }
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::LevelUp) cardPicker_.draw();
+        if (state_ == State::Shop) {
+            shopScreen_.draw(*shop_, arsenal_, economy_.gold(), shopFrozenLeft_, waves_->intermissionLeft());
+        }
         if (state_ == State::Paused) drawPauseOverlay();
         if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
         if (state_ == State::Victory) drawEndScreen("L'AUBE SE LEVE", {255, 210, 120, 255});
@@ -882,6 +950,7 @@ void Game::drawWorld() const
     BeginMode3D(cameraRig_.camera());
     world_->draw(cameraRig_.camera());
     zones_->draw();
+    if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
     waves_->draw();
     cardEffects_.draw(waves_->enemies());
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);

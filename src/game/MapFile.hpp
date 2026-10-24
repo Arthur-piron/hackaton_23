@@ -47,8 +47,15 @@ struct SpawnDef {
     Vector3 position = {0.0f, 0.0f, 0.0f};
 };
 
+// Le marchand, debout derrière son comptoir.
+struct MerchantDef {
+    Vector3 position = {0.0f, 0.0f, 0.0f};
+    float yaw = 0.0f;      // degrés ; 0 : regarde vers +Z (vers la caméra)
+};
+
 struct MapData {
     Vector3 playerSpawn = {0.0f, 0.0f, 0.0f};
+    std::vector<MerchantDef> merchants;
     std::vector<PropDef> props;
     std::vector<WallDef> walls;
     std::vector<ZoneDef> zones;

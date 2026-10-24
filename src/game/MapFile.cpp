@@ -119,6 +119,14 @@ bool parsePlayer(std::istringstream& in, MapData& map)
 {
     return static_cast<bool>(in >> map.playerSpawn.x >> map.playerSpawn.z);
 }
+
+bool parseMerchant(std::istringstream& in, MapData& map)
+{
+    MerchantDef m;
+    if (!(in >> m.position.x >> m.position.z >> m.yaw)) return false;
+    map.merchants.push_back(m);
+    return true;
+}
 }
 
 MapData loadMapFile(const std::string& path)
@@ -151,6 +159,7 @@ MapData loadMapFile(const std::string& path)
         else if (command == "gate") ok = parseGate(in, map);
         else if (command == "spawn") ok = parseSpawn(in, map);
         else if (command == "player") ok = parsePlayer(in, map);
+        else if (command == "merchant") ok = parseMerchant(in, map);
         if (!ok) TraceLog(LOG_WARNING, "MAP: %s:%d ligne ignoree : %s", path.c_str(), number, line.c_str());
     }
     return map;
