@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/SaveFile.hpp"
+#include "game/GameMode.hpp"
 
 #include <array>
 #include <string>
@@ -27,9 +28,18 @@ struct TalentInfo {
     bool implemented;         // un talent pas encore branché s'affiche « à venir » et ne s'achète pas
 };
 
+// Une ligne du tableau des scores local.
+struct ScoreEntry {
+    int score = 0;
+    int wave = 0;
+    GameMode mode = GameMode::Night;
+};
+
 // Ossements, talents et records, conservés d'une partie à l'autre.
 class Progression {
 public:
+    static constexpr int kLeaderboardSize = 10;
+
     static const std::vector<TalentInfo>& talents();
     static const TalentInfo& info(TalentId id);
 
@@ -47,12 +57,18 @@ public:
 
     // Ossements gagnés en cours de partie (élites, boss) : sauvegardés en fin de partie.
     void addBones(int amount) { bones_ += amount; }
-    // Fin de partie : 1 ossement par vague survécue, records, sauvegarde. Renvoie les ossements de la fin de partie.
-    int finishRun(int wavesSurvived, int score, bool victory);
+    // Fin de partie : 1 ossement par vague survécue, records, tableau des scores, sauvegarde.
+    // Renvoie les ossements de la fin de partie.
+    int finishRun(GameMode mode, int wavesSurvived, int score, bool victory);
 
     int bestWave() const { return bestWave_; }
     int bestScore() const { return bestScore_; }
     int victories() const { return victories_; }
+    bool isUnlocked(GameMode mode) const { return victories_ >= gameModeRules(mode).victoriesToUnlock; }
+    // Meilleures parties, de la meilleure à la moins bonne.
+    const std::vector<ScoreEntry>& leaderboard() const { return leaderboard_; }
+    // Place obtenue par la dernière partie dans le tableau (0 = première), -1 si elle n'y entre pas.
+    int lastRank() const { return lastRank_; }
 
     // Effets des talents.
     float startHealthBonus() const;
@@ -73,4 +89,6 @@ private:
     int bestScore_ = 0;
     int victories_ = 0;
     std::array<int, static_cast<size_t>(TalentId::Count)> ranks_{};
+    std::vector<ScoreEntry> leaderboard_;
+    int lastRank_ = -1;
 };

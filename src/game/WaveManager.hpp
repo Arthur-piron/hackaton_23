@@ -41,6 +41,8 @@ public:
     void setFlashlight(bool on, Vector3 origin, Vector3 direction);
     // Fait apparaître un cercle d'ennemis autour d'un point (tests automatiques).
     void spawnRing(Vector3 center, float radius, int count, EnemyType type);
+    // Règles du mode de jeu : endless = pas de victoire à la vague 10 ; vie des morts multipliée.
+    void setRules(bool endless, float healthMultiplier);
 
     std::vector<Enemy>& enemies() { return enemies_; }
     const std::vector<Enemy>& enemies() const { return enemies_; }
@@ -73,5 +75,7 @@ private:
     int toSpawn_ = 0;
     float spawnTimer_ = 0.0f;
     bool cleared_ = false;
+    bool endless_ = false;
+    float healthMultiplier_ = 1.0f;
     unsigned nextId_ = 1;
 };

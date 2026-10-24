@@ -55,6 +55,14 @@ void Progression::load()
         const int max = static_cast<int>(talent.costs.size());
         ranks_[static_cast<size_t>(talent.id)] = std::clamp(file_.getInt(std::string("talent.") + talent.key, 0), 0, max);
     }
+    leaderboard_.clear();
+    for (int i = 0; i < kLeaderboardSize; ++i) {
+        const std::string key = "score." + std::to_string(i) + ".";
+        const int score = file_.getInt(key + "points", -1);
+        if (score < 0) break;
+        const int mode = std::clamp(file_.getInt(key + "mode", 0), 0, static_cast<int>(GameMode::Count) - 1);
+        leaderboard_.push_back({score, file_.getInt(key + "wave", 0), static_cast<GameMode>(mode)});
+    }
 }
 
 void Progression::save()
@@ -67,6 +75,12 @@ void Progression::save()
     file_.setInt("victories", victories_);
     for (const TalentInfo& talent : talents()) {
         file_.setInt(std::string("talent.") + talent.key, rank(talent.id));
+    }
+    for (size_t i = 0; i < leaderboard_.size(); ++i) {
+        const std::string key = "score." + std::to_string(i) + ".";
+        file_.setInt(key + "points", leaderboard_[i].score);
+        file_.setInt(key + "wave", leaderboard_[i].wave);
+        file_.setInt(key + "mode", static_cast<int>(leaderboard_[i].mode));
     }
     file_.save();
 }
@@ -93,13 +107,25 @@ bool Progression::buy(TalentId id)
     return true;
 }
 
-int Progression::finishRun(int wavesSurvived, int score, bool victory)
+int Progression::finishRun(GameMode mode, int wavesSurvived, int score, bool victory)
 {
     const int earned = std::max(0, wavesSurvived);
     bones_ += earned;
     bestWave_ = std::max(bestWave_, wavesSurvived);
     bestScore_ = std::max(bestScore_, score);
     if (victory) ++victories_;
+
+    // Tableau des scores : insertion triée, les parties au-delà de la 10e place sont oubliées.
+    const ScoreEntry entry{score, wavesSurvived, mode};
+    const auto at = std::upper_bound(leaderboard_.begin(), leaderboard_.end(), entry,
+                                     [](const ScoreEntry& a, const ScoreEntry& b) { return a.score > b.score; });
+    lastRank_ = static_cast<int>(at - leaderboard_.begin());
+    if (lastRank_ < kLeaderboardSize) {
+        leaderboard_.insert(at, entry);
+        if (static_cast<int>(leaderboard_.size()) > kLeaderboardSize) leaderboard_.pop_back();
+    } else {
+        lastRank_ = -1;
+    }
     save();
     return earned;
 }

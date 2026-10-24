@@ -119,6 +119,12 @@ void WaveManager::spawnRing(Vector3 center, float radius, int count, EnemyType t
     }
 }
 
+void WaveManager::setRules(bool endless, float healthMultiplier)
+{
+    endless_ = endless;
+    healthMultiplier_ = healthMultiplier;
+}
+
 void WaveManager::startWave(EventQueue& events)
 {
     ++wave_;
@@ -280,6 +286,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
             const EnemyType type = pickType();
             enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
                                   pickSpawnPoint(playerPosition, world, zones));
+            enemies_.back().scaleHealth(healthMultiplier_);
             --toSpawn_;
         }
     }
@@ -296,7 +303,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
         events.push_back({EventType::WaveCleared, playerPosition, static_cast<float>(wave_)});
         phase_ = Phase::Intermission;
         timer_ = kIntermission;
-        if (wave_ >= kFinalWave) cleared_ = true;
+        if (!endless_ && wave_ >= kFinalWave) cleared_ = true;
     }
     return damage;
 }
