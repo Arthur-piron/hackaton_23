@@ -118,7 +118,7 @@ void Player::update(float dt, const World& world, Vector3 aimPoint, Vector3 move
     velocity_ = Vector3Lerp(velocity_, target, 1.0f - std::exp(-kAcceleration * dt));
     recoil_ = Vector3Scale(recoil_, std::exp(-kRecoilDamping * dt));
     const Vector3 step = Vector3Scale(Vector3Add(velocity_, recoil_), dt);
-    position_ = world.clampToBounds(Vector3Add(position_, step), kRadius);
+    position_ = world.resolveCircle(Vector3Add(position_, step), kRadius);
 
     // Les personnages Kenney regardent vers +Z quand yaw = 0.
     const Vector3 toAim = Vector3Subtract(aimPoint, position_);

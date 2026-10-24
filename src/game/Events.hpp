@@ -22,6 +22,8 @@ enum class EventType {
     GoldPicked,    // value = or ramassé
     XpPicked,      // value = XP ramassée
     LevelUp,       // value = nouveau niveau
+    GateOpened,    // value = indice de la zone débloquée
+    BulletImpact,  // balle arrêtée par le décor ; direction = sens de la balle
 };
 
 struct Event {
