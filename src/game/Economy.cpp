@@ -44,6 +44,14 @@ Economy::Reward Economy::addKill(EnemyType type)
     return reward;
 }
 
+Economy::Reward Economy::addDefenseKill(EnemyType type)
+{
+    Reward reward = kKillRewards[static_cast<int>(type)];
+    reward.gold = static_cast<int>(std::lround(static_cast<float>(reward.gold) * goldMultiplier_));
+    reward.xp /= 2;
+    return reward;
+}
+
 void Economy::onPlayerDamaged()
 {
     combo_ /= 2;

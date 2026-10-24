@@ -95,6 +95,7 @@ constexpr Color kPowderColor = {255, 140, 50, 255};
 constexpr float kFlowFieldInterval = 0.25f;
 constexpr float kStructureReach = 0.35f;   // au-delà de son rayon, un mort frappe la structure
 constexpr float kStructureDestroyShake = 0.15f;
+constexpr float kTurretKnockback = 2.0f;
 
 // Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
 // inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
@@ -209,6 +210,7 @@ Game::Game(const Options& options)
     crates_ = std::make_unique<Crates>(*world_);
     structures_ = std::make_unique<Structures>(*world_);
     waves_->setFlowField(&flowField_);
+    turrets_ = std::make_unique<Turrets>(*world_);
     if (!map.altars.empty()) altar_ = std::make_unique<Altar>(map.altars.front());
     if (!map.mysteryBoxes.empty()) {
         mysteryBox_ = std::make_unique<MysteryBox>(map.mysteryBoxes, *world_);
@@ -247,6 +249,7 @@ Game::Game(const Options& options)
         }
         // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
         const Vector3 me = player_->position();
+        structures_->place(StructureKind::Crossbow, Vector3Add(me, {-2.5f, 0.0f, 1.5f}), false);
         structures_->place(StructureKind::Spikes, Vector3Add(me, {-1.5f, 0.0f, -2.5f}), false);
         structures_->place(StructureKind::Mine, Vector3Add(me, {0.5f, 0.0f, -3.5f}), false);
         structures_->place(StructureKind::BearTrap, Vector3Add(me, {1.5f, 0.0f, -2.5f}), false);
@@ -345,6 +348,7 @@ void Game::startNewGame()
     crates_->clear();
     structures_->clear();
     traps_.clear();
+    turrets_->clear();
     buildMode_.reset();
     flowFieldTimer_ = 0.0f;
     arsenal_.reset();
@@ -723,14 +727,14 @@ void Game::resolveProjectiles()
     for (const Projectile& r : rebounds) projectiles_.spawn(r);
 }
 
-bool Game::damageEnemy(Enemy& enemy, float damage, Vector3 direction, float knockback, HitKind kind)
+bool Game::damageEnemy(Enemy& enemy, float damage, Vector3 direction, float knockback, HitKind kind, bool byDefense)
 {
     if (!enemy.isAlive()) return false;
     const size_t first = events_.size();
     const bool killed = enemy.hit(damage, direction, knockback, events_);
     // Enemy::hit publie d'abord EnemyHit : on y précise la nature du coup pour le HUD et le son.
     if (events_.size() > first && events_[first].type == EventType::EnemyHit) events_[first].hit = kind;
-    if (killed) rewardKill(enemy);
+    if (killed) rewardKill(enemy, byDefense);
     return killed;
 }
 
@@ -908,6 +912,9 @@ bool Game::updateBase(float dt, const Controls& c)
     for (const Traps::Blast& blast : trapped.blasts) {
         explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor);
     }
+    for (const Turrets::Hit& hit : turrets_->update(dt, *structures_, waves_->enemies(), *world_, events_)) {
+        damageEnemy(*hit.enemy, hit.damage, hit.direction, kTurretKnockback, HitKind::Normal, true);
+    }
     if (player_->isDead()) {
         buildMode_.reset();
         return false;
@@ -925,6 +932,7 @@ void Game::drawBase() const
 {
     structures_->draw();
     traps_.draw(*structures_);
+    turrets_->draw(*structures_);
     buildMode_.drawWorld(*structures_);
 }
 
@@ -1020,11 +1028,11 @@ void Game::endRun(bool victory)
     state_ = victory ? State::Victory : State::GameOver;
 }
 
-void Game::rewardKill(const Enemy& enemy)
+void Game::rewardKill(const Enemy& enemy, bool byDefense)
 {
     const CardModifiers& m = cards_.modifiers();
     const int multiplierBefore = economy_.comboMultiplier();
-    const Economy::Reward reward = economy_.addKill(enemy.type());
+    const Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
     const Economy::Salvage salvage = Economy::rollSalvage(enemy.type());
@@ -1211,6 +1219,9 @@ void Game::handleEvents()
             audio_.playAt(static_cast<StructureKind>(static_cast<int>(ev.value)) == StructureKind::Mine ? "dry_fire"
                                                                                                          : "hit_heavy",
                           ev.position, 0.6f, 0.2f);
+            break;
+        case EventType::TurretFired:
+            audio_.playAt("reload", ev.position, 0.45f, 0.2f);
             break;
         case EventType::StructureDamaged:
             audio_.playAt("hit_wood", ev.position, 0.5f, 0.2f);
