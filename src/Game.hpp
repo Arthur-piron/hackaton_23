@@ -11,6 +11,7 @@
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
 #include "game/Flashlight.hpp"
+#include "game/FlyingLanterns.hpp"
 #include "game/Merchant.hpp"
 #include "game/MusicDirector.hpp"
 #include "game/Shop.hpp"
@@ -128,6 +129,7 @@ private:
     std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;
+    Model lanternModel_{};  // carte Lanterne volante
     std::unique_ptr<Particles> particles_;
     std::unique_ptr<PostFx> postFx_;
     std::unique_ptr<Lighting> lighting_;
@@ -138,6 +140,7 @@ private:
     Cards cards_;
     CardEffects cardEffects_;
     Flashlight flashlight_;
+    FlyingLanterns flyingLanterns_;
     CameraRig cameraRig_;
     Hud hud_;
     CardPicker cardPicker_;

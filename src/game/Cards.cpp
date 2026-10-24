@@ -57,7 +57,7 @@ const std::vector<CardInfo>& buildCatalog()
         {C::BottomlessMag, "Chargeur sans fond", "INF", "10 % de chances qu'un tir ne consomme pas de balle",
          R::Rare, K::Weapon, 3, true, {}},
         {C::FlyingLantern, "Lanterne volante", "LAN", "Une lanterne orbite autour de toi, éclaire et brûle",
-         R::Rare, K::Light, 2, false, {}},
+         R::Rare, K::Light, 2, true, {}},
         {C::NecroticBlast, "Explosion nécrotique", "NEC", "20 % des morts explosent (2,5 m, 40 dégâts)", R::Rare,
          K::Occult, 2, true, {}},
         {C::Frost, "Gel", "GEL", "Les balles ralentissent de 30 % pendant 1,5 s", R::Rare, K::Weapon, 1, true, {}},
@@ -178,5 +178,6 @@ void Cards::recompute()
     m.frost = has(C::Frost);
     m.batteryMultiplier = 1.0f + kLongBatteryCapacity * r(C::LongBattery);
     m.lightBonusDamage = kUvLampDamage * r(C::UvLamp);
+    m.lanterns = rank(C::FlyingLantern);
     modifiers_ = m;
 }

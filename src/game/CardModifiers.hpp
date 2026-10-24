@@ -18,6 +18,7 @@ struct CardModifiers {
     // Lampe torche
     float batteryMultiplier = 1.0f;    // capacité de la batterie
     float lightBonusDamage = 0.0f;     // dégâts par seconde ajoutés dans le cône (Lampe UV)
+    int lanterns = 0;                  // lanternes volantes en orbite
 
     // Joueur
     float moveSpeedMultiplier = 1.0f;
