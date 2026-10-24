@@ -31,6 +31,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
 
         WeaponStats pistol;
         pistol.name = "Revolver";
+    pistol.goldenName = "Revolver doré";
         pistol.model = "blaster-a.glb";
         pistol.damage = 34.0f;
         pistol.fireInterval = 0.28f;
@@ -44,6 +45,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
 
         WeaponStats shotgun;
         shotgun.name = "Fusil à pompe";
+    shotgun.goldenName = "Fusil à pompe doré";
         shotgun.model = "blaster-d.glb";
         shotgun.damage = 18.0f;
         shotgun.fireInterval = 0.85f;
@@ -60,6 +62,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
 
         WeaponStats smg;
         smg.name = "Mitraillette";
+    smg.goldenName = "Mitraillette dorée";
         smg.model = "blaster-h.glb";
         smg.damage = 16.0f;
         smg.fireInterval = 0.075f;
@@ -76,6 +79,7 @@ const std::vector<WeaponStats>& Arsenal::catalog()
 
         WeaponStats rifle;
         rifle.name = "Fusil de chasse";
+    rifle.goldenName = "Fusil de chasse doré";
         rifle.model = "blaster-k.glb";
         rifle.damage = 120.0f;
         rifle.fireInterval = 0.9f;
@@ -119,7 +123,7 @@ float Arsenal::upgradeMultiplier(WeaponUpgrade upgrade, int level)
 float Arsenal::damageOf(int weapon) const
 {
     return catalog()[static_cast<size_t>(weapon)].damage * modifiers_.damageMultiplier *
-           upgradeOf(weapon, WeaponUpgrade::Damage);
+           upgradeOf(weapon, WeaponUpgrade::Damage) * (isLegendary(weapon) ? kLegendaryDamage : 1.0f);
 }
 
 float Arsenal::fireIntervalOf(int weapon) const
@@ -178,6 +182,11 @@ void Arsenal::unlock(int weapon)
     slot.unlocked = true;
     slot.magazine = magazineOf(weapon);
     refillReserve(weapon);
+}
+
+void Arsenal::makeLegendary(int weapon)
+{
+    if (weapon >= 0 && weapon < static_cast<int>(slots_.size())) slots_[static_cast<size_t>(weapon)].legendary = true;
 }
 
 void Arsenal::refillReserve(int weapon)
@@ -262,7 +271,7 @@ bool Arsenal::update(float dt, bool fireHeld, bool firePressed, bool reloadPress
         p.life = kProjectileLife;
         p.pierce = weapon.pierce + modifiers_.pierceBonus;
         p.ricochets = modifiers_.ricochets;
-        p.incendiary = modifiers_.incendiary;
+        p.incendiary = modifiers_.incendiary || slot.legendary;
         projectiles.spawn(p);
     }
     events.push_back({EventType::Shot, muzzle, static_cast<float>(current_), forward});

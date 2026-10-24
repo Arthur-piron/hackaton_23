@@ -14,6 +14,7 @@
 #include "game/FlyingLanterns.hpp"
 #include "game/Merchant.hpp"
 #include "game/MusicDirector.hpp"
+#include "game/MysteryBox.hpp"
 #include "game/Shop.hpp"
 #include "game/Pickups.hpp"
 #include "game/Player.hpp"
@@ -96,6 +97,8 @@ private:
     void updateLevelUp(float dt);
     // Marchand : ouvert entre les vagues, il fige la pause (au plus kShopMaxFrozen secondes).
     void openShop();
+    // Arme prise à la boîte mystère : débloquée, dorée si légendaire, et en main.
+    void takeMysteryPrize(const MysteryBox::Prize& prize);
     void updateShop(float dt);
     void updateTalents(float dt);
     // Fin de partie : ossements gagnés, records et sauvegarde, puis écran de fin.
@@ -129,6 +132,7 @@ private:
     std::unique_ptr<AnimatedModel> merchantModel_;
     std::unique_ptr<Player> player_;
     std::unique_ptr<Merchant> merchant_; // nul si la carte n'en déclare pas
+    std::unique_ptr<MysteryBox> mysteryBox_; // nulle si la carte n'en déclare pas ; référence world_
     std::unique_ptr<Shop> shop_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;

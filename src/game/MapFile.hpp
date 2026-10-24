@@ -53,9 +53,16 @@ struct MerchantDef {
     float yaw = 0.0f;      // degrés ; 0 : regarde vers +Z (vers la caméra)
 };
 
+// Emplacement possible de la boîte mystère (le premier est celui du départ).
+struct MysteryBoxDef {
+    Vector3 position = {0.0f, 0.0f, 0.0f};
+    float yaw = 0.0f;      // degrés
+};
+
 struct MapData {
     Vector3 playerSpawn = {0.0f, 0.0f, 0.0f};
     std::vector<MerchantDef> merchants;
+    std::vector<MysteryBoxDef> mysteryBoxes;
     std::vector<PropDef> props;
     std::vector<WallDef> walls;
     std::vector<ZoneDef> zones;
