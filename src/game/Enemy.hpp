@@ -63,6 +63,8 @@ public:
     Vector3 hitCenter() const;
     float radius() const;
     float health() const { return health_; }
+    // Mode Cauchemar : multiplie la vie d'un mort qui vient d'apparaître.
+    void scaleHealth(float factor) { health_ *= factor; }
     EnemyType type() const { return type_; }
     const EnemyStats& stats() const { return enemyStats(type_); }
     // Identifiant unique (stable même si le tableau des ennemis est réorganisé).

@@ -77,7 +77,7 @@ constexpr Color kClearColor = {140, 230, 150, 255};
 constexpr Color kLevelColor = {90, 235, 200, 255};
 constexpr Color kGateColor = {255, 215, 120, 255};
 constexpr Color kBoneColor = {235, 225, 195, 255};
-constexpr Color kControlsColor = {140, 135, 125, 255};
+constexpr Color kRecordColor = {255, 205, 90, 255};
 constexpr int kArmoryWeapon = 1; // talent Arsenal : fusil à pompe (indice dans Arsenal::catalog)
 constexpr float kGateShake = 0.3f;
 
@@ -243,7 +243,7 @@ void Game::loadAudio()
 
 void Game::run()
 {
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !quitRequested_) {
         // En --smoke, la simulation avance à pas fixe : même durée simulée quelle que soit la machine.
         const float dt = options_.smokeFrames > 0 ? kSmokeFrameTime : std::min(GetFrameTime(), kMaxFrameTime);
         update(dt);
@@ -274,6 +274,7 @@ void Game::startNewGame()
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
+    waves_->setRules(gameModeRules(mode_).endless, gameModeRules(mode_).enemyHealth);
     projectiles_.clear();
     economy_.reset();
     economy_.addGold(progression_->startGold());
@@ -349,17 +350,24 @@ void Game::update(float dt)
     }
 
     switch (state_) {
-    case State::Menu:
-        if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    case State::Menu: {
+        const MainMenu::Result menu = mainMenu_.update(dt, *progression_);
+        if (menu.moved) audio_.play("ui_click", 0.35f, 0.1f);
+        if (menu.refused) audio_.play("dry_fire", 0.6f, 0.0f);
+        if (menu.quit) quitRequested_ = true;
+        if (menu.startMode >= 0) {
+            mode_ = static_cast<GameMode>(menu.startMode);
+            audio_.play("ui_confirm", 0.8f, 0.0f);
             startNewGame();
             musicDirector_.startNight(audio_);
             state_ = State::Playing;
-        } else if (IsKeyPressed(KEY_T)) {
+        } else if (menu.openTalents) {
             talentScreen_.open();
             audio_.play("ui_click", 0.8f, 0.0f);
             state_ = State::Talents;
         }
         break;
+    }
     case State::Talents:
         updateTalents(dt);
         break;
@@ -696,7 +704,7 @@ void Game::applyCardModifiers()
     player_->setSpeedMultiplier(m.moveSpeedMultiplier);
     player_->setStaminaMultipliers(m.staminaMultiplier, m.staminaRegenMultiplier);
     player_->setMaxHealthBonus(m.maxHealthBonus + progression_->startHealthBonus());
-    economy_.setGoldMultiplier(m.goldMultiplier);
+    economy_.setGoldMultiplier(m.goldMultiplier * gameModeRules(mode_).gold);
     pickups_.setMagnetMultiplier(m.magnetMultiplier);
     flashlight_.setModifiers(m.batteryMultiplier * progression_->batteryMultiplier(), m.lightBonusDamage);
 }
@@ -784,7 +792,7 @@ void Game::endRun(bool victory)
 {
     // Une vague est « survécue » quand elle est terminée : celle en cours ne compte pas.
     const int survived = victory ? waves_->wave() : waves_->wave() - 1;
-    bonesEarned_ = progression_->finishRun(survived, score_, victory);
+    bonesEarned_ = progression_->finishRun(mode_, survived, score_, victory);
     state_ = victory ? State::Victory : State::GameOver;
 }
 
@@ -1000,7 +1008,7 @@ void Game::draw() const
     ClearBackground(kBackgroundColor);
 
     if (state_ == State::Menu) {
-        drawMenu();
+        mainMenu_.draw(*progression_);
     } else if (state_ == State::Talents) {
         talentScreen_.draw(*progression_);
     } else {
@@ -1062,25 +1070,6 @@ void Game::drawEyes() const
     lighting_->endGlow();
 }
 
-void Game::drawMenu() const
-{
-    const int w = GetScreenWidth();
-    const int h = GetScreenHeight();
-    const char* title = "LAST LIGHT";
-    fonts::drawText(title, (w - fonts::measureText(title, 96)) / 2, h / 4, 96, {230, 200, 120, 255});
-    const char* tagline = "Les morts craignent la lumière. Tiens jusqu'à l'aube.";
-    fonts::drawText(tagline, (w - fonts::measureText(tagline, 22)) / 2, h / 4 + 110, 22, {180, 170, 150, 255});
-    const char* hint = "Entrée pour commencer";
-    fonts::drawText(hint, (w - fonts::measureText(hint, 28)) / 2, h / 2 + 20, 28, RAYWHITE);
-    const char* talents = TextFormat("T : talents   (%d ossements)", progression_->bones());
-    fonts::drawText(talents, (w - fonts::measureText(talents, 22)) / 2, h / 2 + 64, 22, kBoneColor);
-    const char* move = "ZQSD : bouger   Maj : sprint   E : interagir   Entrée : vague suivante";
-    const char* fight = "Clic : tirer   Clic droit : lampe   R : recharger   1-4 / molette : armes";
-    fonts::drawText(move, (w - fonts::measureText(move, 16)) / 2, h - 76, 16, kControlsColor);
-    fonts::drawText(fight, (w - fonts::measureText(fight, 16)) / 2, h - 50, 16, kControlsColor);
-    DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
-}
-
 void Game::drawPauseOverlay() const
 {
     const int w = GetScreenWidth();
@@ -1098,11 +1087,17 @@ void Game::drawEndScreen(const char* title, Color color) const
     const int h = GetScreenHeight();
     DrawRectangle(0, 0, w, h, {0, 0, 0, 170});
     fonts::drawText(title, (w - fonts::measureText(title, 80)) / 2, h / 3, 80, color);
-    const char* stats = TextFormat("Vague %d   -   %d morts   -   score %d", waves_->wave(), kills_, score_);
+    const char* stats = TextFormat("%s   -   vague %d   -   %d morts   -   score %d", gameModeRules(mode_).name,
+                                   waves_->wave(), kills_, score_);
     fonts::drawText(stats, (w - fonts::measureText(stats, 26)) / 2, h / 3 + 110, 26, RAYWHITE);
     const char* bones = TextFormat("+%d ossements   (total %d, record vague %d)", bonesEarned_, progression_->bones(),
                                    progression_->bestWave());
     fonts::drawText(bones, (w - fonts::measureText(bones, 22)) / 2, h / 3 + 150, 22, kBoneColor);
+    const int rank = progression_->lastRank();
+    if (rank >= 0) {
+        const char* place = rank == 0 ? "NOUVEAU RECORD !" : TextFormat("%de au tableau des scores", rank + 1);
+        fonts::drawText(place, (w - fonts::measureText(place, 24)) / 2, h / 3 + 186, 24, kRecordColor);
+    }
     const char* hint = "Entrée : rejouer   Échap : menu";
-    fonts::drawText(hint, (w - fonts::measureText(hint, 22)) / 2, h / 3 + 200, 22, LIGHTGRAY);
+    fonts::drawText(hint, (w - fonts::measureText(hint, 22)) / 2, h / 3 + 236, 22, LIGHTGRAY);
 }

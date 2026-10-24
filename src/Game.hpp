@@ -24,6 +24,7 @@
 #include "game/Zones.hpp"
 #include "ui/CardPicker.hpp"
 #include "ui/Hud.hpp"
+#include "ui/MainMenu.hpp"
 #include "ui/ShopScreen.hpp"
 #include "ui/TalentScreen.hpp"
 
@@ -105,7 +106,6 @@ private:
     void drawWorld() const;
     // Yeux des morts, qui luisent dans le noir.
     void drawEyes() const;
-    void drawMenu() const;
     void drawPauseOverlay() const;
     void drawEndScreen(const char* title, Color color) const;
     HudData hudData() const;
@@ -145,6 +145,9 @@ private:
     float shopFrozenLeft_ = 0.0f;  // temps de pause figée restant chez le marchand
     std::unique_ptr<Progression> progression_;
     TalentScreen talentScreen_;
+    MainMenu mainMenu_;
+    GameMode mode_ = GameMode::Night;
+    bool quitRequested_ = false;     // « Quitter » dans le menu
     int bonesEarned_ = 0;          // ossements gagnés par la partie qui vient de finir
     EventQueue events_;
 
