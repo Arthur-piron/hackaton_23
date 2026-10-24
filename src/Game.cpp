@@ -167,6 +167,8 @@ Game::Game(const Options& options)
     waves_->setShader(lighting_->shader());
     lighting_->apply(keeperModel_->model());
     for (Model& model : weaponModels_) lighting_->apply(model);
+    lanternModel_ = LoadModel(assetPath("models/town/lantern.glb").c_str());
+    lighting_->apply(lanternModel_);
     shop_ = std::make_unique<Shop>(economy_, arsenal_, *player_);
     if (!map.merchants.empty()) {
         merchantModel_ = std::make_unique<AnimatedModel>(assetPath("models/graveyard/character-vampire.glb"));
@@ -187,7 +189,8 @@ Game::Game(const Options& options)
         arsenal_.addAmmo(kSmokeWeapon, kSmokeAmmo);
         arsenal_.select(kSmokeWeapon);
         // Quelques cartes actives : flammes, rebonds et critiques visibles sur la capture.
-        for (CardId card : {CardId::Incendiary, CardId::Ricochet, CardId::CriticalHit, CardId::Piercing}) {
+        for (CardId card : {CardId::Incendiary, CardId::Ricochet, CardId::CriticalHit, CardId::Piercing,
+                            CardId::FlyingLantern}) {
             cards_.take(card);
         }
         applyCardModifiers();
@@ -200,6 +203,7 @@ Game::Game(const Options& options)
 Game::~Game()
 {
     for (Model& model : weaponModels_) UnloadModel(model);
+    UnloadModel(lanternModel_);
     lighting_.reset();
     postFx_.reset();
     particles_.reset();
@@ -266,6 +270,7 @@ void Game::startNewGame()
     cardEffects_.clear();
     pendingExplosions_.clear();
     flashlight_.reset();
+    flyingLanterns_.reset();
     levelUpSlowMo_ = 0.0f;
     pocketSunTimer_ = kPocketSunInterval;
     lastStandReady_ = true;
@@ -423,6 +428,7 @@ void Game::updateLighting(float dt)
     fill.range = kPlayerFillRange;
     fill.intensity = kPlayerFillIntensity;
     lighting_->addLight(fill);
+    for (const PointLight& lantern : flyingLanterns_.lights()) lighting_->addLight(lantern);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -485,6 +491,10 @@ void Game::updatePlaying(float dt)
     for (const Flashlight::LightTick& tick :
          flashlight_.illuminate(dt, player_->position(), player_->forward(), waves_->enemies(), *world_)) {
         damageEnemy(*tick.enemy, tick.damage, {0.0f, 0.0f, 0.0f}, 0.0f, HitKind::Light);
+    }
+    flyingLanterns_.update(dt, player_->position());
+    for (const FlyingLanterns::Burn& burn : flyingLanterns_.burn(dt, waves_->enemies())) {
+        damageEnemy(*burn.enemy, burn.damage, {0.0f, 0.0f, 0.0f}, 0.0f, HitKind::Light);
     }
     updateCardEffects(dt);
     economy_.update(dt);
@@ -707,6 +717,7 @@ void Game::applyCardModifiers()
     economy_.setGoldMultiplier(m.goldMultiplier * gameModeRules(mode_).gold);
     pickups_.setMagnetMultiplier(m.magnetMultiplier);
     flashlight_.setModifiers(m.batteryMultiplier * progression_->batteryMultiplier(), m.lightBonusDamage);
+    flyingLanterns_.setCount(m.lanterns);
 }
 
 void Game::openShop()
@@ -1047,6 +1058,7 @@ void Game::drawWorld() const
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
     projectiles_.draw();
     drawEyes();
+    flyingLanterns_.draw(lanternModel_);
     pickups_.draw();
     particles_->draw(cameraRig_.camera());
     lighting_->drawHalos(cameraRig_.camera());
