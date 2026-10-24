@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fx/PointLight.hpp"
 #include "game/MapFile.hpp"
 #include "raylib.h"
 
@@ -25,6 +26,10 @@ public:
     bool segmentBlocked(Vector3 a, Vector3 b, Vector3& hit) const;
 
     Vector3 playerSpawn() const { return playerSpawn_; }
+    // Lumières des décors éclairants (lampadaires, braseros, lanternes, bougies...).
+    const std::vector<PointLight>& lights() const { return lights_; }
+    // Fait passer le sol et tous les modèles, chargés ou à venir, par ce shader.
+    void setShader(const Shader& shader);
 
     // Modèle relatif à assets/models/, chargé au premier appel puis partagé.
     const Model& model(const std::string& file);
@@ -53,11 +58,14 @@ private:
     void addProp(const PropDef& prop);
     void addWall(const WallDef& wall);
     void createGround();
+    void addLight(const std::string& file, const BoundingBox& placed);
 
     std::unordered_map<std::string, Model> models_;
     std::unordered_map<std::string, Texture2D> textures_; // texture partagée par kit
     std::vector<Placed> props_;
     std::vector<Blocker> blockers_;
+    std::vector<PointLight> lights_;
+    Shader shader_{}; // id 0 : shader par défaut de raylib
     Vector3 playerSpawn_ = {0.0f, 0.0f, 0.0f};
     Texture2D groundTexture_{};
     Model ground_{};

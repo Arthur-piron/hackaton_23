@@ -27,6 +27,8 @@ public:
     // Renvoie les dégâts infligés au joueur pendant cette image.
     float update(float dt, Vector3 playerPosition, const World& world, const Zones& zones, EventQueue& events);
     void draw() const;
+    // Fait passer les modèles des morts par ce shader (éclairage de nuit).
+    void setShader(const Shader& shader);
     // Passe immédiatement à la vague suivante pendant la pause.
     void skipIntermission();
     // Fait apparaître un cercle d'ennemis autour d'un point (tests automatiques).
