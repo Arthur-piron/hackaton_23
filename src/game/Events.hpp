@@ -38,6 +38,9 @@ enum class EventType {
     CrateLanded,        // une caisse touche le sol
     CrateBroken,        // value = CrateKind
     ResourcePicked,     // value = quantité, direction.x = Resource
+    BuildDenied,        // pose refusée, ou mode construction hors des pauses
+    StructurePlaced,    // value = StructureKind
+    StructureRemoved,   // revente ou annulation
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

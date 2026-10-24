@@ -206,6 +206,13 @@ bool Zones::tryOpenNearest(Vector3 player, Economy& economy, EventQueue& events)
     return true;
 }
 
+std::vector<Vector3> Zones::gateCenters() const
+{
+    std::vector<Vector3> centers;
+    for (const Gate& gate : gates_) centers.push_back(gate.center);
+    return centers;
+}
+
 std::vector<Rectangle> Zones::openAreas() const
 {
     std::vector<Rectangle> areas;
