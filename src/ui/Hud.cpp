@@ -27,6 +27,9 @@ constexpr Color kComboColors[] = {
 constexpr float kGoldPulseDecay = 4.0f;
 constexpr float kComboPulseDecay = 5.0f;
 constexpr int kComboMinShown = 2; // une mort isolée n'affiche pas de combo
+constexpr int kCardPip = 30;      // pastilles des cartes possédées
+constexpr int kCardPipGap = 5;
+constexpr int kCardsPerRow = 9;
 
 void drawTextCentered(const char* text, int cx, int y, int size, Color color)
 {
@@ -71,9 +74,9 @@ void Hud::announce(const std::string& title, const std::string& subtitle, Color 
     announceAge_ = 0.0f;
 }
 
-void Hud::addDamageNumber(Vector3 position, float value, Color color)
+void Hud::addDamageNumber(Vector3 position, float value, Color color, float scale)
 {
-    numbers_.push_back({position, TextFormat("%d", static_cast<int>(std::lround(value))), color, 0.0f});
+    numbers_.push_back({position, TextFormat("%d", static_cast<int>(std::lround(value))), color, 0.0f, scale});
 }
 
 void Hud::draw(const Camera3D& camera, const HudData& data) const
@@ -81,7 +84,7 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
     for (const FloatingText& n : numbers_) {
         const Vector2 p = GetWorldToScreen(n.position, camera);
         const float t = n.age / kNumberLifetime;
-        const int size = static_cast<int>(22 + 10 * (1.0f - t));
+        const int size = static_cast<int>((22 + 10 * (1.0f - t)) * n.scale);
         Color c = n.color;
         c.a = static_cast<unsigned char>(255 * (1.0f - t * t));
         drawTextShadow(n.text.c_str(), static_cast<int>(p.x) - MeasureText(n.text.c_str(), size) / 2,
@@ -103,8 +106,35 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
     drawWave(data);
     drawEconomy(data);
     drawCombo(data);
+    drawCards(data);
     drawAnnouncement();
     drawCrosshair();
+}
+
+void Hud::drawCards(const HudData& data) const
+{
+    // Rangée de pastilles juste au-dessus du panneau de vie, qui remonte d'une ligne si besoin.
+    const int bottom = GetScreenHeight() - kMargin - 58 - 18;
+    for (size_t i = 0; i < data.cards.size(); ++i) {
+        const HudCard& card = data.cards[i];
+        const int column = static_cast<int>(i) % kCardsPerRow;
+        const int row = static_cast<int>(i) / kCardsPerRow;
+        const float x = static_cast<float>(kMargin - 10 + column * (kCardPip + kCardPipGap));
+        const float y = static_cast<float>(bottom - kCardPip - row * (kCardPip + kCardPipGap));
+        const Rectangle r = {x, y, static_cast<float>(kCardPip), static_cast<float>(kCardPip)};
+        DrawRectangleRounded(r, 0.3f, 6, kPanel);
+        DrawRectangleRounded({x + 2.0f, y + 2.0f, r.width - 4.0f, r.height - 4.0f}, 0.3f, 6,
+                             {card.color.r, card.color.g, card.color.b, 50});
+        DrawRectangleRoundedLinesEx(r, 0.3f, 6, 1.5f, {card.border.r, card.border.g, card.border.b, 220});
+        const int labelWidth = MeasureText(card.label.c_str(), 10);
+        DrawText(card.label.c_str(), static_cast<int>(x) + (kCardPip - labelWidth) / 2, static_cast<int>(y) + 8, 10,
+                 card.color);
+        // Un point par rang possédé.
+        for (int k = 0; k < card.rank && card.maxRank > 1; ++k) {
+            const float dx = (static_cast<float>(k) - static_cast<float>(card.rank - 1) / 2.0f) * 6.0f;
+            DrawCircleV({x + r.width / 2.0f + dx, y + r.height - 7.0f}, 2.0f, kText);
+        }
+    }
 }
 
 void Hud::drawBars(const HudData& data) const

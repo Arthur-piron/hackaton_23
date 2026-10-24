@@ -5,6 +5,7 @@
 #include "raymath.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 
 namespace {
@@ -30,9 +31,39 @@ constexpr int kSmokeAmmo = 400;
 constexpr float kMuzzleBase = 0.8f;
 constexpr float kMuzzleShakeScale = 1.5f;
 constexpr float kPlayerBloodHeight = 1.1f;
+// En --smoke, une montée de niveau est forcée à cette distance de la fin : la capture montre les cartes.
+constexpr int kSmokeShowcaseFrames = 80;
+
+// Cartes
+constexpr float kLevelUpSlowMo = 0.4f;     // durée réelle du ralenti avant l'écran des cartes
+constexpr float kSlowMoScale = 0.25f;
+constexpr float kCritMultiplier = 3.0f;
+constexpr float kReaperThreshold = 0.15f;  // fraction de la vie max
+constexpr float kRicochetRange = 8.0f;
+constexpr float kRicochetLifeMargin = 0.2f;
+constexpr float kFireChainRadius = 5.0f;
+constexpr int kFireChainTargets = 3;
+constexpr float kNecroticRadius = 2.5f;
+constexpr float kNecroticDamage = 40.0f;
+constexpr float kNecroticKnockback = 5.0f;
+constexpr float kPocketSunInterval = 20.0f;
+constexpr float kPocketSunRadius = 8.0f;
+constexpr float kPocketSunDamage = 60.0f;
+constexpr float kLastStandRadius = 7.0f;
+constexpr float kLastStandDamage = 10.0f;
+constexpr float kLastStandKnockback = 16.0f;
+constexpr int kFortuneComboMultiplier = 5;
+constexpr int kFortuneCoins = 50;
+constexpr int kFortuneGoldPerCoin = 5;
+constexpr float kExplosionShake = 0.35f;
 
 constexpr Color kBackgroundColor = {12, 14, 22, 255};
 constexpr Color kDamageColor = {255, 245, 220, 255};
+constexpr Color kCritColor = {255, 225, 40, 255};
+constexpr Color kBurnColor = {255, 140, 50, 255};
+constexpr Color kNecroticColor = {150, 255, 90, 200};
+constexpr Color kSunColor = {255, 230, 150, 220};
+constexpr Color kLastStandColor = {120, 200, 255, 220};
 constexpr Color kPlayerDamageColor = {255, 80, 80, 255};
 constexpr Color kWaveColor = {230, 200, 120, 255};
 constexpr Color kClearColor = {140, 230, 150, 255};
@@ -42,6 +73,21 @@ constexpr float kGateShake = 0.3f;
 
 // Sons de tir par arme (indices du catalogue d'Arsenal).
 const char* const kShotSounds[] = {"gun_pistol", "gun_shotgun", "gun_pistol", "gun_rifle"};
+
+bool chance(float probability)
+{
+    return static_cast<float>(GetRandomValue(0, 9999)) < probability * 10000.0f;
+}
+
+Vector3 flatDirection(Vector3 from, Vector3 to)
+{
+    return Vector3Normalize({to.x - from.x, 0.0f, to.z - from.z});
+}
+
+float flatDistance(Vector3 a, Vector3 b)
+{
+    return Vector2Distance({a.x, a.z}, {b.x, b.z});
+}
 
 // raylib nomme les touches d'après leur position sur un clavier QWERTY :
 // KEY_W/A/S/D correspondent physiquement à Z/Q/S/D sur un clavier AZERTY.
@@ -90,6 +136,11 @@ Game::Game(const Options& options)
         arsenal_.unlock(kSmokeWeapon);
         arsenal_.addAmmo(kSmokeWeapon, kSmokeAmmo);
         arsenal_.select(kSmokeWeapon);
+        // Quelques cartes actives : flammes, rebonds et critiques visibles sur la capture.
+        for (CardId card : {CardId::Incendiary, CardId::Ricochet, CardId::CriticalHit, CardId::Piercing}) {
+            cards_.take(card);
+        }
+        applyCardModifiers();
     } else {
         audio_.playMusic("menu.ogg", 0.45f);
     }
@@ -131,6 +182,7 @@ void Game::loadAudio()
     audio_.loadGroup("wave_bell", {"wave_bell.ogg"}, 1);
     audio_.loadGroup("ui_confirm", {"ui_confirm.ogg"}, 1);
     audio_.loadGroup("pickup", {"pickup.ogg"}, 6);
+    audio_.loadGroup("ui_click", {"ui_click.ogg"}, 2);
 }
 
 void Game::run()
@@ -151,6 +203,14 @@ void Game::run()
 
 void Game::startNewGame()
 {
+    // Les bonus des cartes sont remis à zéro d'abord : la vie et les chargeurs en dépendent.
+    cards_.reset();
+    applyCardModifiers();
+    cardEffects_.clear();
+    pendingExplosions_.clear();
+    levelUpSlowMo_ = 0.0f;
+    pocketSunTimer_ = kPocketSunInterval;
+    lastStandReady_ = true;
     player_->reset(world_->playerSpawn());
     zones_->reset();
     arsenal_.reset();
@@ -219,6 +279,11 @@ void Game::update(float dt)
     hud_.update(dt);
     postFx_->update(dt, 1.0f - player_->health() / player_->maxHealth());
 
+    // --smoke : un niveau gagné juste avant la fin, pour que la capture montre l'écran des cartes.
+    if (options_.smokeFrames > 0 && frameCount_ == options_.smokeFrames - kSmokeShowcaseFrames) {
+        economy_.addXp(economy_.xpToNextLevel() - economy_.xp(), events_);
+    }
+
     switch (state_) {
     case State::Menu:
         if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -233,6 +298,9 @@ void Game::update(float dt)
             break;
         }
         updatePlaying(dt);
+        break;
+    case State::LevelUp:
+        updateLevelUp(dt);
         break;
     case State::Paused:
         if (IsKeyPressed(KEY_ESCAPE)) state_ = State::Playing;
@@ -258,6 +326,16 @@ void Game::update(float dt)
 
 void Game::updatePlaying(float dt)
 {
+    // Montée de niveau : court ralenti, puis l'écran des cartes fige la partie.
+    if (levelUpSlowMo_ > 0.0f) {
+        levelUpSlowMo_ -= dt;
+        if (levelUpSlowMo_ <= 0.0f) {
+            openCardPicker();
+            return;
+        }
+        dt *= kSlowMoScale;
+    }
+
     // Hit-stop : la simulation se fige un court instant sur un coup important.
     if (hitStop_ > 0.0f) {
         hitStop_ -= dt;
@@ -288,6 +366,7 @@ void Game::updatePlaying(float dt)
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), *world_, *zones_, events_);
     resolveProjectiles();
+    updateCardEffects(dt);
     economy_.update(dt);
     pickups_.update(dt, player_->position(), economy_, events_);
     particles_->update(dt);
@@ -305,7 +384,7 @@ void Game::updatePlaying(float dt)
                 from = e.position();
             }
         }
-        player_->takeDamage(damage, from, events_);
+        hurtPlayer(damage, from);
     }
 
     const Vector3 toAim = Vector3Subtract(c.aim, player_->position());
@@ -322,11 +401,16 @@ void Game::updatePlaying(float dt)
         state_ = State::GameOver;
     } else if (waves_->allWavesCleared()) {
         state_ = State::Victory;
+    } else if (!player_->isDead() && economy_.pendingLevelUps() > 0 && levelUpSlowMo_ <= 0.0f) {
+        levelUpSlowMo_ = kLevelUpSlowMo;
     }
 }
 
 void Game::resolveProjectiles()
 {
+    const CardModifiers& m = cards_.modifiers();
+    // Les rebonds sont ajoutés après la boucle : on ne modifie pas le tableau qu'on parcourt.
+    std::vector<Projectile> rebounds;
     for (Projectile& p : projectiles_.projectiles()) {
         if (!p.alive) continue;
         // Le décor arrête la balle : seuls les morts touchés avant l'obstacle comptent.
@@ -342,7 +426,40 @@ void Game::resolveProjectiles()
             const Vector3 b = {p.position.x, center.y, p.position.z};
             float t = 0.0f;
             if (!segmentHitsSphere(a, b, center, e.radius(), t) || t > wallT) continue;
-            if (e.hit(p.damage, p.velocity, p.knockback, events_)) rewardKill(e);
+
+            // Crochet onHit : critique, Faucheuse, feu.
+            float damage = p.damage;
+            HitKind kind = HitKind::Normal;
+            if (chance(m.critChance)) {
+                damage *= kCritMultiplier;
+                kind = HitKind::Critical;
+            }
+            if (m.reaper && e.health() - damage < e.stats().health * kReaperThreshold) {
+                damage = std::max(damage, e.health());
+            }
+            const bool chained = p.rebound && m.fireChain;
+            if (damageEnemy(e, damage, p.velocity, p.knockback, kind)) {
+                if (p.ricochets > 0) {
+                    if (const Enemy* next = nearestEnemy(center, kRicochetRange)) {
+                        Projectile r = p;
+                        const float speed = Vector3Length(p.velocity);
+                        const Vector3 dir = flatDirection(center, next->hitCenter());
+                        r.position = {center.x, p.position.y, center.z};
+                        r.previous = r.position;
+                        r.velocity = Vector3Scale(dir, speed);
+                        r.life = kRicochetRange / speed + kRicochetLifeMargin;
+                        r.pierce = 0;
+                        r.ricochets = p.ricochets - 1;
+                        r.rebound = true;
+                        r.lastHit = e.id();
+                        rebounds.push_back(r);
+                    }
+                }
+            } else if (p.incendiary || chained) {
+                cardEffects_.ignite(e);
+            }
+            if (chained) spreadFire(e);
+
             p.lastHit = e.id();
             if (p.pierce > 0) {
                 --p.pierce;
@@ -356,13 +473,167 @@ void Game::resolveProjectiles()
             events_.push_back({EventType::BulletImpact, impact, 0.0f, Vector3Normalize(p.velocity)});
         }
     }
+    for (const Projectile& r : rebounds) projectiles_.spawn(r);
+}
+
+bool Game::damageEnemy(Enemy& enemy, float damage, Vector3 direction, float knockback, HitKind kind)
+{
+    if (!enemy.isAlive()) return false;
+    const size_t first = events_.size();
+    const bool killed = enemy.hit(damage, direction, knockback, events_);
+    // Enemy::hit publie d'abord EnemyHit : on y précise la nature du coup pour le HUD et le son.
+    if (events_.size() > first && events_[first].type == EventType::EnemyHit) events_[first].hit = kind;
+    if (killed) rewardKill(enemy);
+    return killed;
+}
+
+Enemy* Game::nearestEnemy(Vector3 from, float maxDistance)
+{
+    Enemy* best = nullptr;
+    float bestDistance = maxDistance;
+    for (Enemy& e : waves_->enemies()) {
+        if (!e.isAlive()) continue;
+        const float d = flatDistance(e.position(), from);
+        if (d < bestDistance) {
+            bestDistance = d;
+            best = &e;
+        }
+    }
+    return best;
+}
+
+void Game::spreadFire(const Enemy& source)
+{
+    std::vector<std::pair<float, Enemy*>> around;
+    for (Enemy& e : waves_->enemies()) {
+        if (!e.isAlive() || e.id() == source.id()) continue;
+        const float d = flatDistance(e.position(), source.position());
+        if (d <= kFireChainRadius) around.emplace_back(d, &e);
+    }
+    const size_t count = std::min(around.size(), static_cast<size_t>(kFireChainTargets));
+    std::partial_sort(around.begin(), around.begin() + static_cast<std::ptrdiff_t>(count), around.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+    for (size_t i = 0; i < count; ++i) cardEffects_.ignite(*around[i].second);
+}
+
+void Game::updateCardEffects(float dt)
+{
+    const CardModifiers& m = cards_.modifiers();
+    for (const CardEffects::BurnTick& tick : cardEffects_.update(dt, waves_->enemies())) {
+        damageEnemy(*tick.enemy, tick.damage, {0.0f, 0.0f, 0.0f}, 0.0f, HitKind::Burn);
+    }
+
+    if (m.pocketSun && !player_->isDead()) {
+        pocketSunTimer_ -= dt;
+        if (pocketSunTimer_ <= 0.0f) {
+            pocketSunTimer_ = kPocketSunInterval;
+            const Vector3 me = player_->position();
+            cardEffects_.addBlast(Vector3Add(me, {0.0f, 1.0f, 0.0f}), kPocketSunRadius, kSunColor);
+            events_.push_back({EventType::Explosion, me, kPocketSunRadius});
+            for (Enemy& e : waves_->enemies()) {
+                if (!e.isAlive() || flatDistance(e.position(), me) > kPocketSunRadius) continue;
+                if (!damageEnemy(e, kPocketSunDamage, flatDirection(me, e.position()), kNecroticKnockback)) {
+                    cardEffects_.ignite(e);
+                }
+            }
+        }
+    }
+
+    // Explosions nécrotiques : une explosion peut en déclencher d'autres, traitées dans la même image.
+    while (!pendingExplosions_.empty()) {
+        const Vector3 center = pendingExplosions_.back();
+        pendingExplosions_.pop_back();
+        cardEffects_.addBlast(center, kNecroticRadius, kNecroticColor);
+        events_.push_back({EventType::Explosion, center, kNecroticRadius});
+        for (Enemy& e : waves_->enemies()) {
+            if (!e.isAlive() || flatDistance(e.position(), center) > kNecroticRadius + e.radius()) continue;
+            damageEnemy(e, kNecroticDamage, flatDirection(center, e.position()), kNecroticKnockback);
+        }
+    }
+}
+
+void Game::hurtPlayer(float damage, Vector3 from)
+{
+    // Dernier rempart : le coup mortel laisse à 1 PV et repousse tous les morts proches.
+    const bool lethal = damage >= player_->health() && !player_->isInvulnerable();
+    if (lethal && cards_.modifiers().lastStand && lastStandReady_) {
+        lastStandReady_ = false;
+        damage = std::max(0.0f, player_->health() - 1.0f);
+        const Vector3 me = player_->position();
+        cardEffects_.addBlast(Vector3Add(me, {0.0f, 1.0f, 0.0f}), kLastStandRadius, kLastStandColor);
+        events_.push_back({EventType::LastStand, me});
+        for (Enemy& e : waves_->enemies()) {
+            if (e.isAlive() && flatDistance(e.position(), me) <= kLastStandRadius) {
+                damageEnemy(e, kLastStandDamage, flatDirection(me, e.position()), kLastStandKnockback);
+            }
+        }
+        if (damage <= 0.0f) return;
+    }
+    player_->takeDamage(damage, from, events_);
+}
+
+void Game::applyCardModifiers()
+{
+    const CardModifiers& m = cards_.modifiers();
+    arsenal_.setModifiers(m);
+    player_->setSpeedMultiplier(m.moveSpeedMultiplier);
+    player_->setStaminaMultipliers(m.staminaMultiplier, m.staminaRegenMultiplier);
+    player_->setMaxHealthBonus(m.maxHealthBonus);
+    economy_.setGoldMultiplier(m.goldMultiplier);
+    pickups_.setMagnetMultiplier(m.magnetMultiplier);
+}
+
+void Game::openCardPicker()
+{
+    if (player_->isDead()) return;
+    const std::vector<CardId> choices = cards_.drawChoices(Cards::kChoices);
+    if (choices.empty()) {
+        // Toutes les cartes sont au rang maximal : le niveau est acquis sans choix.
+        while (economy_.pendingLevelUps() > 0) economy_.consumeLevelUp();
+        return;
+    }
+    // Niveau atteint par la montée de niveau en cours (plusieurs peuvent être en attente).
+    cardPicker_.open(choices, cards_, economy_.level() - economy_.pendingLevelUps() + 1);
+    audio_.play("ui_click", 0.8f, 0.0f);
+    state_ = State::LevelUp;
+}
+
+void Game::updateLevelUp(float dt)
+{
+    // --smoke : le pilote automatique prend la première carte, sauf pour la capture finale.
+    const bool showcase = frameCount_ >= options_.smokeFrames - kSmokeShowcaseFrames;
+    if (options_.smokeFrames > 0 && !showcase && cardPicker_.isSettled()) cardPicker_.choose(0);
+
+    const CardPicker::Result result = cardPicker_.update(dt);
+    if (result.hoverChanged) audio_.play("ui_click", 0.35f, 0.1f);
+    if (result.picked) audio_.play("ui_confirm", 0.8f, 0.0f);
+    if (result.chosen < 0) return;
+
+    const CardId card = cardPicker_.choice(result.chosen);
+    cards_.take(card);
+    economy_.consumeLevelUp();
+    applyCardModifiers();
+    hud_.announce(Cards::info(card).name, Cards::info(card).description, CardPicker::rarityColor(Cards::info(card).rarity));
+    state_ = State::Playing;
+    // Plusieurs niveaux d'un coup : les choix s'enchaînent.
+    if (economy_.pendingLevelUps() > 0) openCardPicker();
 }
 
 void Game::rewardKill(const Enemy& enemy)
 {
+    const CardModifiers& m = cards_.modifiers();
+    const int multiplierBefore = economy_.comboMultiplier();
     const Economy::Reward reward = economy_.addKill(enemy.type());
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     hud_.pulseCombo();
+
+    // Crochet onKill : Vampirisme, Explosion nécrotique, Fortune du mort.
+    if (m.lifeSteal > 0.0f) player_->heal(player_->maxHealth() * m.lifeSteal);
+    if (chance(m.explosiveCorpseChance)) pendingExplosions_.push_back(enemy.hitCenter());
+    if (m.deadMansFortune && multiplierBefore < kFortuneComboMultiplier &&
+        economy_.comboMultiplier() >= kFortuneComboMultiplier) {
+        pickups_.spawnCoinRain(player_->position(), kFortuneCoins, kFortuneGoldPerCoin);
+    }
 }
 
 void Game::handleEvents()
@@ -383,11 +654,22 @@ void Game::handleEvents()
         case EventType::ReloadStart:
             audio_.play("reload", 0.6f);
             break;
-        case EventType::EnemyHit:
+        case EventType::EnemyHit: {
+            const Vector3 above = Vector3Add(ev.position, {0.0f, 0.8f, 0.0f});
+            if (ev.hit == HitKind::Burn) {
+                // Le feu mord en silence, en petits chiffres orange.
+                hud_.addDamageNumber(above, ev.value, kBurnColor, 0.7f);
+                break;
+            }
             audio_.playAt("hit_flesh", ev.position, 0.55f, 0.15f);
-            hud_.addDamageNumber(Vector3Add(ev.position, {0.0f, 0.8f, 0.0f}), ev.value, kDamageColor);
+            if (ev.hit == HitKind::Critical) {
+                hud_.addDamageNumber(above, ev.value, kCritColor, 1.45f);
+            } else {
+                hud_.addDamageNumber(above, ev.value, kDamageColor);
+            }
             particles_->bloodHit(ev.position, ev.direction);
             break;
+        }
         case EventType::EnemyKilled:
             audio_.playAt("body_fall", ev.position, 0.7f);
             score_ += static_cast<int>(ev.value);
@@ -419,6 +701,7 @@ void Game::handleEvents()
         case EventType::WaveStarted:
             audio_.play("wave_bell", 0.8f, 0.0f);
             hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
+            lastStandReady_ = true;
             break;
         case EventType::WaveCleared:
             audio_.play("ui_confirm", 0.7f, 0.0f);
@@ -444,6 +727,15 @@ void Game::handleEvents()
         case EventType::BulletImpact:
             particles_->impact(ev.position, Vector3Negate(ev.direction));
             audio_.playAt("hit_wood", ev.position, 0.3f, 0.15f);
+            break;
+        case EventType::Explosion:
+            audio_.playAt("hit_heavy", ev.position, 0.8f, 0.2f);
+            cameraRig_.shake(kExplosionShake * std::min(1.0f, ev.value / kNecroticRadius));
+            break;
+        case EventType::LastStand:
+            audio_.play("wave_bell", 0.9f, 0.0f);
+            cameraRig_.shake(kDeathShake);
+            hud_.announce("DERNIER REMPART", "Pas encore...", kLastStandColor);
             break;
         }
     }
@@ -476,7 +768,7 @@ HudData Game::hudData() const
     const WeaponStats& weapon = arsenal_.stats();
     d.weaponName = weapon.name;
     d.magazine = arsenal_.ammoInMagazine();
-    d.magazineSize = weapon.magazine;
+    d.magazineSize = arsenal_.magazineSize();
     d.reserve = arsenal_.reserve();
     d.infiniteReserve = weapon.infiniteReserve;
     d.reloading = arsenal_.isReloading();
@@ -494,6 +786,11 @@ HudData Game::hudData() const
     d.combo = economy_.combo();
     d.comboMultiplier = economy_.comboMultiplier();
     d.comboTimeLeft = economy_.comboTimeLeft() / Economy::kComboWindow;
+    for (CardId id : cards_.owned()) {
+        const CardInfo& card = Cards::info(id);
+        d.cards.push_back({card.shortName, CardPicker::categoryColor(card.category),
+                           CardPicker::rarityColor(card.rarity), cards_.rank(id), card.maxRank});
+    }
     return d;
 }
 
@@ -514,6 +811,7 @@ void Game::draw() const
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
         }
         hud_.draw(cameraRig_.camera(), hudData());
+        if (state_ == State::LevelUp) cardPicker_.draw();
         if (state_ == State::Paused) drawPauseOverlay();
         if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
         if (state_ == State::Victory) drawEndScreen("L'AUBE SE LEVE", {255, 210, 120, 255});
@@ -529,6 +827,7 @@ void Game::drawWorld() const
     world_->draw(cameraRig_.camera());
     zones_->draw();
     waves_->draw();
+    cardEffects_.draw(waves_->enemies());
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
     projectiles_.draw();
     pickups_.draw();

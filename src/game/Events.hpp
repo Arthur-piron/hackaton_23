@@ -24,13 +24,19 @@ enum class EventType {
     LevelUp,       // value = nouveau niveau
     GateOpened,    // value = indice de la zone débloquée
     BulletImpact,  // balle arrêtée par le décor ; direction = sens de la balle
+    Explosion,     // value = rayon (cadavre nécrotique, flash du Soleil de poche...)
+    LastStand,     // le Dernier rempart a sauvé le joueur
 };
+
+// Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.
+enum class HitKind { Normal, Critical, Burn };
 
 struct Event {
     EventType type;
     Vector3 position = {0.0f, 0.0f, 0.0f};
     float value = 0.0f;
     Vector3 direction = {0.0f, 0.0f, 0.0f};
+    HitKind hit = HitKind::Normal;
 };
 
 using EventQueue = std::vector<Event>;

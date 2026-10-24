@@ -21,6 +21,11 @@ constexpr float kMagnetDelay = 0.4f;     // laisse le temps de voir le jaillisse
 constexpr float kMagnetAcceleration = 45.0f;
 constexpr float kMagnetMaxSpeed = 22.0f;
 constexpr float kPickupRadius = 0.7f;
+// Pluie de pièces : anneau autour du joueur, hauteur de départ.
+constexpr float kRainMinRadius = 1.5f;
+constexpr float kRainMaxRadius = 6.0f;
+constexpr float kRainMinHeight = 5.0f;
+constexpr float kRainMaxHeight = 10.0f;
 constexpr float kPlayerChestHeight = 0.8f;
 
 constexpr int kGoldPerCoin = 5;
@@ -77,6 +82,21 @@ void Pickups::spawnLoot(Vector3 position, int gold, int xp)
     }
 }
 
+void Pickups::spawnCoinRain(Vector3 center, int coins, int goldPerCoin)
+{
+    for (int i = 0; i < coins; ++i) {
+        const float angle = randomRange(0.0f, 2.0f * PI);
+        const float distance = randomRange(kRainMinRadius, kRainMaxRadius);
+        Item item;
+        item.value = goldPerCoin;
+        item.position = {center.x + std::cos(angle) * distance, randomRange(kRainMinHeight, kRainMaxHeight),
+                         center.z + std::sin(angle) * distance};
+        item.velocity = {0.0f, -randomRange(0.0f, 4.0f), 0.0f};
+        item.phase = randomRange(0.0f, 2.0f * PI);
+        items_.push_back(item);
+    }
+}
+
 void Pickups::update(float dt, Vector3 playerPosition, Economy& economy, EventQueue& events)
 {
     const Vector3 target = {playerPosition.x, kPlayerChestHeight, playerPosition.z};
@@ -84,7 +104,9 @@ void Pickups::update(float dt, Vector3 playerPosition, Economy& economy, EventQu
         if (item.collected) continue;
         item.age += dt;
         const Vector3 flat = {target.x - item.position.x, 0.0f, target.z - item.position.z};
-        if (!item.attracted && item.age > kMagnetDelay && Vector3Length(flat) < kMagnetRadius) item.attracted = true;
+        if (!item.attracted && item.age > kMagnetDelay && Vector3Length(flat) < kMagnetRadius * magnetMultiplier_) {
+            item.attracted = true;
+        }
 
         if (item.attracted) {
             // Accélère vers le joueur ; la vitesse est réorientée à chaque image pour ne pas le rater.

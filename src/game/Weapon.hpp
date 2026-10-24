@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/CardModifiers.hpp"
 #include "game/Events.hpp"
 #include "game/Projectile.hpp"
 #include "raylib.h"
@@ -40,9 +41,13 @@ public:
     void cycle(int direction);
     void addAmmo(int weapon, int amount);
     void unlock(int weapon);
+    // Bonus des cartes, appliqués à toutes les armes.
+    void setModifiers(const CardModifiers& modifiers) { modifiers_ = modifiers; }
 
     int current() const { return current_; }
     const WeaponStats& stats() const { return catalog()[current_]; }
+    // Taille du chargeur de l'arme courante, bonus compris.
+    int magazineSize() const { return magazineOf(current_); }
     int ammoInMagazine() const { return slots_[current_].magazine; }
     int reserve() const { return slots_[current_].reserve; }
     bool isReloading() const { return reloadTimer_ > 0.0f; }
@@ -59,7 +64,10 @@ private:
     };
 
     void startReload(EventQueue& events, Vector3 position);
+    float reloadTime() const { return stats().reloadTime * modifiers_.reloadMultiplier; }
+    int magazineOf(int weapon) const;
 
+    CardModifiers modifiers_;
     std::vector<Slot> slots_;
     int current_ = 0;
     float cooldown_ = 0.0f;

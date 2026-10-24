@@ -1,6 +1,7 @@
 #include "game/Economy.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 // Or et XP lâchés par type d'ennemi (dans l'ordre d'EnemyType).
@@ -37,7 +38,7 @@ Economy::Reward Economy::addKill(EnemyType type)
     ++combo_;
     comboTimer_ = kComboWindow;
     Reward reward = kKillRewards[static_cast<int>(type)];
-    reward.gold *= comboMultiplier();
+    reward.gold = static_cast<int>(std::lround(static_cast<float>(reward.gold * comboMultiplier()) * goldMultiplier_));
     return reward;
 }
 
