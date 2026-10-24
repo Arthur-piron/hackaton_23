@@ -14,8 +14,8 @@ constexpr float kGroundSize = 150.0f;
 constexpr Vector3 kGroundCenter = {0.0f, 0.0f, -16.0f};
 constexpr int kGroundTextureSize = 512;
 constexpr float kGroundNoiseScale = 9.0f;
-constexpr Color kGrassColor = {30, 44, 30, 255};
-constexpr Color kDirtColor = {58, 50, 38, 255};
+constexpr Color kGrassColor = {52, 68, 50, 255};
+constexpr Color kDirtColor = {86, 74, 56, 255};
 
 // Les décors plus loin que ça du point visé par la caméra ne sont pas dessinés.
 constexpr float kDrawRadius = 42.0f;
@@ -24,6 +24,25 @@ constexpr float kMinBlockerThickness = 0.5f;
 // Collision « tronc » : fraction de l'emprise au sol de l'arbre.
 constexpr float kTrunkFraction = 0.32f;
 constexpr int kResolvePasses = 2;
+
+// Décors qui éclairent la nuit, reconnus à leur nom de fichier.
+struct LightProp {
+    const char* name;
+    Color color;
+    float range;
+    float intensity;
+    float flicker;
+    float halo;
+    float height; // hauteur de la source, en fraction de la hauteur du modèle posé
+};
+const LightProp kLightProps[] = {
+    {"lightpost", {255, 190, 115, 255}, 7.5f, 2.4f, 0.05f, 1.8f, 0.86f},
+    {"fire-basket", {255, 118, 40, 255}, 7.5f, 3.2f, 0.45f, 2.6f, 1.7f},
+    {"campfire", {255, 118, 40, 255}, 6.5f, 3.0f, 0.45f, 2.4f, 2.2f},
+    {"lantern", {255, 165, 80, 255}, 5.5f, 1.4f, 0.2f, 1.1f, 0.55f},
+    {"candle", {255, 160, 70, 255}, 4.0f, 1.1f, 0.3f, 0.8f, 1.1f},
+    {"carved", {255, 130, 30, 255}, 3.5f, 0.9f, 0.3f, 0.7f, 0.5f},
+};
 
 Color lerpColor(Color a, Color b, float t)
 {
@@ -93,6 +112,15 @@ World::~World()
     UnloadTexture(groundTexture_);
 }
 
+void World::setShader(const Shader& shader)
+{
+    shader_ = shader;
+    ground_.materials[0].shader = shader;
+    for (auto& entry : models_) {
+        for (int i = 0; i < entry.second.materialCount; ++i) entry.second.materials[i].shader = shader;
+    }
+}
+
 void World::createGround()
 {
     // Bruit de Perlin teinté entre herbe sombre et terre : pas de damier, pas de répétition visible.
@@ -125,6 +153,7 @@ const Model& World::model(const std::string& file)
     // (UnloadModel ne libère pas les textures : elles sont libérées dans le destructeur.)
     const std::string kit = file.substr(0, file.find('/'));
     for (int i = 0; i < loaded.materialCount; ++i) {
+        if (shader_.id != 0) loaded.materials[i].shader = shader_;
         Texture2D& texture = loaded.materials[i].maps[MATERIAL_MAP_DIFFUSE].texture;
         if (texture.id == 0 || texture.id == rlGetTextureIdDefault()) continue;
         auto shared = textures_.find(kit);
@@ -169,9 +198,27 @@ void World::addProp(const PropDef& prop)
 {
     const Model& m = model(prop.model);
     props_.push_back({&m, prop.position, prop.yaw, prop.scale});
-    if (prop.collision == PropCollision::None) return;
     const BoundingBox box = placedBounds(m, prop.position, prop.yaw, prop.scale);
+    addLight(prop.model, box);
+    if (prop.collision == PropCollision::None) return;
     addBlocker(prop.collision == PropCollision::Trunk ? trunkOf(box) : thicken(box));
+}
+
+void World::addLight(const std::string& file, const BoundingBox& placed)
+{
+    for (const LightProp& kind : kLightProps) {
+        if (file.find(kind.name) == std::string::npos) continue;
+        PointLight light;
+        light.position = {(placed.min.x + placed.max.x) * 0.5f, placed.min.y + (placed.max.y - placed.min.y) * kind.height,
+                          (placed.min.z + placed.max.z) * 0.5f};
+        light.color = kind.color;
+        light.range = kind.range;
+        light.intensity = kind.intensity;
+        light.flicker = kind.flicker;
+        light.halo = kind.halo;
+        lights_.push_back(light);
+        return;
+    }
 }
 
 void World::addWall(const WallDef& wall)

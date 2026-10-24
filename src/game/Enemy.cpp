@@ -18,6 +18,10 @@ constexpr float kSinkDuration = 1.2f;
 constexpr float kSinkDepth = 1.6f;
 constexpr float kBodyRadius = 0.42f;
 constexpr float kChestHeight = 0.95f;
+// Yeux, dans le repère du nœud « head » (le visage regarde vers +Z).
+constexpr Vector3 kZombieEye = {0.085f, 0.2f, 0.19f};
+constexpr Vector3 kSkeletonEye = {0.06f, 0.13f, 0.17f};
+constexpr float kEyeFadeDuration = 0.4f;
 
 const EnemyStats kStats[] = {
     // nom, modèle, vie, vitesse, dégâts, portée, recharge, échelle, teinte, anim, vitesse anim, score, résistance
@@ -54,6 +58,7 @@ Enemy::Enemy(unsigned id, EnemyType type, const AnimatedModel& model, Vector3 po
     , clipMove_(model.findClip(enemyStats(type).moveClip))
     , clipAttack_(model.findClip("attack-melee-right"))
     , clipDie_(model.findClip("die"))
+    , headNode_(model.findNode("head"))
 {
     model_->play(anim_, clipMove_, true, speedJitter_);
     anim_.time = randomRange(0.0f, 1.0f); // désynchronise les démarches
@@ -161,11 +166,29 @@ void Enemy::push(Vector3 offset)
     position_ = Vector3Add(position_, offset);
 }
 
-void Enemy::draw() const
+Matrix Enemy::bodyTransform() const
 {
     const float scale = kKenneyScale * stats().scale;
-    const Matrix transform = MatrixMultiply(MatrixMultiply(MatrixScale(scale, scale, scale), MatrixRotateY(yaw_)),
-                                            MatrixTranslate(position_.x, position_.y, position_.z));
+    return MatrixMultiply(MatrixMultiply(MatrixScale(scale, scale, scale), MatrixRotateY(yaw_)),
+                          MatrixTranslate(position_.x, position_.y, position_.z));
+}
+
+void Enemy::eyePositions(Vector3& left, Vector3& right) const
+{
+    const Matrix head = model_->nodeTransform(anim_, headNode_, bodyTransform());
+    const Vector3 eye = type_ == EnemyType::Skeleton ? kSkeletonEye : kZombieEye;
+    left = Vector3Transform(eye, head);
+    right = Vector3Transform({-eye.x, eye.y, eye.z}, head);
+}
+
+float Enemy::eyeGlow() const
+{
+    if (state_ != State::Dying) return 1.0f;
+    return std::max(0.0f, 1.0f - deathTimer_ / kEyeFadeDuration);
+}
+
+void Enemy::draw() const
+{
     Color tint = stats().tint;
     if (flash_ > 0.0f) {
         // Éclat vers le blanc chaud quand l'ennemi est touché.
@@ -174,5 +197,5 @@ void Enemy::draw() const
         tint.g = static_cast<unsigned char>(tint.g + (230 - tint.g) * k);
         tint.b = static_cast<unsigned char>(tint.b + (200 - tint.b) * k);
     }
-    model_->draw(anim_, transform, tint);
+    model_->draw(anim_, bodyTransform(), tint);
 }

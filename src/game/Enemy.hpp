@@ -35,6 +35,10 @@ public:
     bool hit(float damage, Vector3 direction, float knockback, EventQueue& events);
     void push(Vector3 offset);
     void draw() const;
+    // Yeux qui luisent dans le noir : position monde de chaque œil.
+    void eyePositions(Vector3& left, Vector3& right) const;
+    // Éclat des yeux : 1 en vie, s'éteint pendant la mort.
+    float eyeGlow() const;
 
     bool isAlive() const { return state_ != State::Dying; }
     bool isRemovable() const { return removable_; }
@@ -50,6 +54,8 @@ public:
 
 private:
     enum class State { Chasing, Attacking, Dying };
+
+    Matrix bodyTransform() const;
 
     unsigned id_;
     EnemyType type_;
@@ -72,4 +78,5 @@ private:
     int clipMove_;
     int clipAttack_;
     int clipDie_;
+    int headNode_;
 };

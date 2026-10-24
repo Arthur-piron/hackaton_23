@@ -58,6 +58,14 @@ WaveManager::WaveManager()
 
 WaveManager::~WaveManager() = default;
 
+void WaveManager::setShader(const Shader& shader)
+{
+    for (const std::shared_ptr<AnimatedModel>& model : models_) {
+        Model& m = model->model();
+        for (int i = 0; i < m.materialCount; ++i) m.materials[i].shader = shader;
+    }
+}
+
 void WaveManager::reset()
 {
     enemies_.clear();

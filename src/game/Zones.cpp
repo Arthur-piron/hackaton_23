@@ -24,6 +24,9 @@ constexpr float kPostThickness = 0.9f;
 constexpr float kGateHeight = 2.0f;
 constexpr float kInteractDistance = 2.0f;
 constexpr float kSignDistance = 12.0f;
+// Les panneaux lointains ne s'affichent pas sous le titre du HUD ni au ras des bords de l'écran.
+constexpr float kSignTopMargin = 110.0f;
+constexpr float kSignEdgeMargin = 40.0f;
 // À l'ouverture, la grille tremble et s'enfonce dans le sol.
 constexpr float kOpenDuration = 1.4f;
 constexpr float kSinkDepth = 1.9f;
@@ -250,7 +253,11 @@ void Zones::drawPrompt(const Camera3D& camera, Vector3 player, int gold) const
         const ZoneDef& zone = zones_[static_cast<size_t>(gate.zone)].def;
         const Vector2 screen = GetWorldToScreen(Vector3Add(gate.center, {0.0f, kGateHeight + 0.4f, 0.0f}), camera);
         if (static_cast<int>(i) != nearest) {
-            drawCenteredText(TextFormat("%s - %d", zone.name.c_str(), zone.price), screen, 18, kSignColor);
+            const bool onScreen = screen.y > kSignTopMargin && screen.y < GetScreenHeight() - kSignEdgeMargin &&
+                                  screen.x > kSignEdgeMargin && screen.x < GetScreenWidth() - kSignEdgeMargin;
+            if (onScreen) {
+                drawCenteredText(TextFormat("%s - %d", zone.name.c_str(), zone.price), screen, 18, kSignColor);
+            }
             continue;
         }
         const bool affordable = gold >= zone.price;

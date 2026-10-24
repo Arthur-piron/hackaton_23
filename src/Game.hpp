@@ -2,6 +2,7 @@
 
 #include "core/AnimatedModel.hpp"
 #include "core/Audio.hpp"
+#include "fx/Lighting.hpp"
 #include "fx/Particles.hpp"
 #include "fx/PostFx.hpp"
 #include "game/CameraRig.hpp"
@@ -83,9 +84,13 @@ private:
     void updateLevelUp(float dt);
     void handleEvents();
     void updateFootsteps(float dt);
+    // Lampe torche, lumière d'appoint du joueur et envoi des lumières au shader.
+    void updateLighting(float dt);
 
     void draw() const;
     void drawWorld() const;
+    // Yeux des morts, qui luisent dans le noir.
+    void drawEyes() const;
     void drawMenu() const;
     void drawPauseOverlay() const;
     void drawEndScreen(const char* title, Color color) const;
@@ -107,6 +112,7 @@ private:
     std::vector<Model> weaponModels_;
     std::unique_ptr<Particles> particles_;
     std::unique_ptr<PostFx> postFx_;
+    std::unique_ptr<Lighting> lighting_;
     Arsenal arsenal_;
     ProjectileSystem projectiles_;
     Economy economy_;

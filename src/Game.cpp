@@ -71,6 +71,21 @@ constexpr Color kLevelColor = {90, 235, 200, 255};
 constexpr Color kGateColor = {255, 215, 120, 255};
 constexpr float kGateShake = 0.3f;
 
+// Éclairage de nuit : lampe torche tenue à hauteur de poitrine, légèrement
+// inclinée vers le sol, et faible lumière d'appoint pour garder le joueur lisible.
+constexpr float kFlashlightHeight = 1.25f;
+constexpr float kFlashlightForward = 0.35f;
+constexpr float kFlashlightTilt = 0.16f;
+constexpr Color kPlayerFillColor = {150, 175, 230, 255};
+constexpr float kPlayerFillHeight = 2.2f;
+constexpr float kPlayerFillRange = 4.5f;
+constexpr float kPlayerFillIntensity = 0.7f;
+// Yeux des morts : un cœur vif dans un halo rouge orangé.
+constexpr Color kEyeHaloColor = {255, 70, 20, 200};
+constexpr Color kEyeCoreColor = {255, 200, 120, 255};
+constexpr float kEyeHaloSize = 0.55f;
+constexpr float kEyeCoreSize = 0.14f;
+
 // Sons de tir par arme (indices du catalogue d'Arsenal).
 const char* const kShotSounds[] = {"gun_pistol", "gun_shotgun", "gun_pistol", "gun_rifle"};
 
@@ -123,6 +138,12 @@ Game::Game(const Options& options)
     }
     particles_ = std::make_unique<Particles>();
     postFx_ = std::make_unique<PostFx>();
+    lighting_ = std::make_unique<Lighting>();
+    lighting_->setStaticLights(world_->lights());
+    world_->setShader(lighting_->shader());
+    waves_->setShader(lighting_->shader());
+    lighting_->apply(keeperModel_->model());
+    for (Model& model : weaponModels_) lighting_->apply(model);
     loadAudio();
 
     startNewGame();
@@ -149,6 +170,7 @@ Game::Game(const Options& options)
 Game::~Game()
 {
     for (Model& model : weaponModels_) UnloadModel(model);
+    lighting_.reset();
     postFx_.reset();
     particles_.reset();
     waves_.reset();
@@ -322,6 +344,24 @@ void Game::update(float dt)
         }
         break;
     }
+    updateLighting(dt);
+}
+
+void Game::updateLighting(float dt)
+{
+    const Vector3 position = player_->position();
+    const Vector3 forward = player_->forward();
+    const Vector3 lamp = {position.x + forward.x * kFlashlightForward, position.y + kFlashlightHeight,
+                          position.z + forward.z * kFlashlightForward};
+    lighting_->aimFlashlight(lamp, {forward.x, -kFlashlightTilt, forward.z});
+
+    PointLight fill;
+    fill.position = Vector3Add(position, {0.0f, kPlayerFillHeight, 0.0f});
+    fill.color = kPlayerFillColor;
+    fill.range = kPlayerFillRange;
+    fill.intensity = kPlayerFillIntensity;
+    lighting_->addLight(fill);
+    lighting_->update(dt, cameraRig_.camera().target);
 }
 
 void Game::updatePlaying(float dt)
@@ -646,6 +686,7 @@ void Game::handleEvents()
             cameraRig_.shake(arsenal_.stats().shake);
             particles_->muzzleFlash(ev.position, ev.direction,
                                     kMuzzleBase + kMuzzleShakeScale * arsenal_.stats().shake);
+            lighting_->muzzleFlash(ev.position);
             break;
         }
         case EventType::DryFire:
@@ -830,9 +871,28 @@ void Game::drawWorld() const
     cardEffects_.draw(waves_->enemies());
     player_->draw(&weaponModels_[static_cast<size_t>(arsenal_.current())]);
     projectiles_.draw();
+    drawEyes();
     pickups_.draw();
     particles_->draw(cameraRig_.camera());
+    lighting_->drawHalos(cameraRig_.camera());
     EndMode3D();
+}
+
+void Game::drawEyes() const
+{
+    const Camera3D& camera = cameraRig_.camera();
+    lighting_->beginGlow();
+    for (const Enemy& enemy : waves_->enemies()) {
+        const float glow = enemy.eyeGlow();
+        if (glow <= 0.0f) continue;
+        Vector3 eyes[2];
+        enemy.eyePositions(eyes[0], eyes[1]);
+        for (const Vector3& eye : eyes) {
+            lighting_->drawGlow(camera, eye, kEyeHaloSize, ColorAlpha(kEyeHaloColor, glow * kEyeHaloColor.a / 255.0f));
+            lighting_->drawGlow(camera, eye, kEyeCoreSize, ColorAlpha(kEyeCoreColor, glow));
+        }
+    }
+    lighting_->endGlow();
 }
 
 void Game::drawMenu() const
