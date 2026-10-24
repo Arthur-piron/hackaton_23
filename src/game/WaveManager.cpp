@@ -21,6 +21,27 @@ constexpr float kSeparationStrength = 4.0f;
 // Contournement : un mort qui bute de face (cosinus) longe l'obstacle à cette fraction de sa vitesse.
 constexpr float kHeadOnThreshold = 0.5f;
 constexpr float kDetourSpeed = 0.8f;
+// Cône de la lampe torche, comme dans fx/Lighting.cpp : les vampires le fuient.
+constexpr float kFlashlightRange = 14.0f;
+constexpr float kFlashlightHalfAngle = 27.0f * DEG2RAD;
+// Les vampires évitent le cœur des lumières du décor (fraction de leur portée).
+constexpr float kLightAvoidFraction = 0.7f;
+
+// Probabilité d'apparition (en %) d'un type : base + parVague × vague, à partir de premièreVague.
+// Le reste des tirages donne des marcheurs.
+struct SpawnChance {
+    EnemyType type;
+    int firstWave;
+    int base;
+    int perWave;
+};
+constexpr SpawnChance kSpawnChances[] = {
+    {EnemyType::Brute, 4, 4, 1},
+    {EnemyType::Ghost, 5, -3, 1},
+    {EnemyType::Vampire, 4, -1, 1},
+    {EnemyType::Runner, 2, 16, 2},
+    {EnemyType::Skeleton, 3, 20, 0},
+};
 
 int waveQuota(int wave)
 {
@@ -110,10 +131,69 @@ void WaveManager::startWave(EventQueue& events)
 EnemyType WaveManager::pickType() const
 {
     const int r = roll(100);
-    if (wave_ >= 4 && r <= 4 + wave_) return EnemyType::Brute;
-    if (wave_ >= 2 && r <= 20 + wave_ * 3) return EnemyType::Runner;
-    if (wave_ >= 3 && r <= 40 + wave_ * 3) return EnemyType::Skeleton;
+    int threshold = 0;
+    for (const SpawnChance& chance : kSpawnChances) {
+        if (wave_ < chance.firstWave) continue;
+        threshold += std::max(0, chance.base + chance.perWave * wave_);
+        if (r <= threshold) return chance.type;
+    }
     return EnemyType::Walker;
+}
+
+void WaveManager::setFlashlight(bool on, Vector3 origin, Vector3 direction)
+{
+    flashlightOn_ = on;
+    flashlightOrigin_ = origin;
+    flashlightDirection_ = Vector3Normalize({direction.x, 0.0f, direction.z});
+}
+
+bool WaveManager::inFlashlight(Vector3 position) const
+{
+    if (!flashlightOn_) return false;
+    const Vector3 toEnemy = {position.x - flashlightOrigin_.x, 0.0f, position.z - flashlightOrigin_.z};
+    const float distance = Vector3Length(toEnemy);
+    if (distance > kFlashlightRange) return false;
+    if (distance < 1e-3f) return true;
+    return Vector3DotProduct(toEnemy, flashlightDirection_) / distance >= std::cos(kFlashlightHalfAngle);
+}
+
+Vector3 WaveManager::lightEscape(Vector3 position) const
+{
+    Vector3 escape = {0.0f, 0.0f, 0.0f};
+    // Hors du cône : de côté, en s'éloignant de l'axe de la lampe.
+    if (inFlashlight(position)) {
+        const Vector3 toEnemy = {position.x - flashlightOrigin_.x, 0.0f, position.z - flashlightOrigin_.z};
+        const float along = Vector3DotProduct(toEnemy, flashlightDirection_);
+        Vector3 aside = Vector3Subtract(toEnemy, Vector3Scale(flashlightDirection_, along));
+        if (Vector3Length(aside) < 1e-3f) aside = {-flashlightDirection_.z, 0.0f, flashlightDirection_.x};
+        escape = Vector3Add(Vector3Normalize(aside), Vector3Scale(flashlightDirection_, 0.3f));
+    }
+    // Hors des flaques de lumière du décor, d'autant plus fort qu'il est près de la source.
+    for (const PointLight& light : lights_) {
+        const float radius = light.range * kLightAvoidFraction;
+        const Vector3 away = {position.x - light.position.x, 0.0f, position.z - light.position.z};
+        const float distance = Vector3Length(away);
+        if (distance >= radius || distance < 1e-3f) continue;
+        escape = Vector3Add(escape, Vector3Scale(away, (1.0f - distance / radius) / distance));
+    }
+    return escape;
+}
+
+EnemySenses WaveManager::sense(const Enemy& enemy, Vector3 playerPosition, Vector3 playerForward,
+                               const Zones& zones) const
+{
+    EnemySenses senses;
+    // Les spectres traversent les grilles : ils vont droit sur le joueur.
+    senses.goal = enemy.stats().ethereal ? playerPosition : zones.steer(enemy.position(), playerPosition);
+    senses.player = playerPosition;
+    senses.playerForward = playerForward;
+    senses.inFlashlight = false;
+    senses.lightEscape = {0.0f, 0.0f, 0.0f};
+    if (enemy.stats().fearsLight && enemy.isAlive()) {
+        senses.inFlashlight = inFlashlight(enemy.position());
+        senses.lightEscape = lightEscape(enemy.position());
+    }
+    return senses;
 }
 
 Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition, const World& world, const Zones& zones) const
@@ -137,7 +217,8 @@ Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition, const World& world, 
 void WaveManager::collide(float dt, Vector3 playerPosition, const World& world, const Zones& zones)
 {
     for (Enemy& e : enemies_) {
-        if (!e.isAlive()) continue;
+        // Les spectres traversent le décor.
+        if (!e.isAlive() || e.stats().ethereal) continue;
         const Vector3 position = e.position();
         Vector3 resolved = world.resolveCircle(position, e.radius());
         const Vector3 correction = Vector3Subtract(resolved, position);
@@ -182,8 +263,8 @@ void WaveManager::separate(float dt)
     }
 }
 
-float WaveManager::update(float dt, Vector3 playerPosition, const World& world, const Zones& zones,
-                          EventQueue& events)
+float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForward, const World& world,
+                          const Zones& zones, EventQueue& events)
 {
     if (phase_ == Phase::Intermission && !cleared_) {
         timer_ -= dt;
@@ -205,7 +286,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, const World& world, 
 
     float damage = 0.0f;
     // Chaque mort marche vers le joueur, ou vers la grille qui mène à sa zone.
-    for (Enemy& e : enemies_) damage += e.update(dt, zones.steer(e.position(), playerPosition), events);
+    for (Enemy& e : enemies_) damage += e.update(dt, sense(e, playerPosition, playerForward, zones), events);
     separate(dt);
     collide(dt, playerPosition, world, zones);
     enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(), [](const Enemy& e) { return e.isRemovable(); }),
@@ -222,5 +303,11 @@ float WaveManager::update(float dt, Vector3 playerPosition, const World& world, 
 
 void WaveManager::draw() const
 {
-    for (const Enemy& e : enemies_) e.draw();
+    // Les spectres, semi-transparents, passent après les morts opaques.
+    for (const Enemy& e : enemies_) {
+        if (!e.stats().ethereal) e.draw();
+    }
+    for (const Enemy& e : enemies_) {
+        if (e.stats().ethereal) e.draw();
+    }
 }

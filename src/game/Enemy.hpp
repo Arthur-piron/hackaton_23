@@ -4,7 +4,7 @@
 #include "game/Events.hpp"
 #include "raylib.h"
 
-enum class EnemyType { Walker, Runner, Skeleton, Brute, Count };
+enum class EnemyType { Walker, Runner, Skeleton, Brute, Vampire, Ghost, Count };
 
 struct EnemyStats {
     const char* name;
@@ -20,9 +20,20 @@ struct EnemyStats {
     float animReferenceSpeed;
     int score;
     float knockbackResistance; // 0 = subit tout le recul, 1 = insensible
+    bool fearsLight;         // fuit la lampe torche et les lumières du décor, attaque de dos
+    bool ethereal;           // traverse le décor, flotte, semi-transparent
 };
 
 const EnemyStats& enemyStats(EnemyType type);
+
+// Ce qu'un mort perçoit pendant une image (rempli par WaveManager).
+struct EnemySenses {
+    Vector3 goal;            // où il va : le joueur, ou la grille qui mène à sa zone
+    Vector3 player;          // position du joueur (portée d'attaque, contournement)
+    Vector3 playerForward;   // vers où le joueur regarde et éclaire
+    Vector3 lightEscape;     // direction pour sortir de la lumière (nulle dans le noir)
+    bool inFlashlight;       // pris dans le cône de la lampe torche
+};
 
 // Un mort-vivant : poursuit le joueur, attaque au contact, meurt en animation.
 class Enemy {
@@ -30,9 +41,11 @@ public:
     Enemy(unsigned id, EnemyType type, const AnimatedModel& model, Vector3 position);
 
     // Renvoie les dégâts infligés au joueur pendant cette image.
-    float update(float dt, Vector3 target, EventQueue& events);
+    float update(float dt, const EnemySenses& senses, EventQueue& events);
     // Inflige des dégâts ; renvoie vrai si l'ennemi vient de mourir.
     bool hit(float damage, Vector3 direction, float knockback, EventQueue& events);
+    // Ralentit de `fraction` (0..1) pendant `duration` secondes ; le plus fort ralentissement l'emporte.
+    void slow(float fraction, float duration);
     void push(Vector3 offset);
     void draw() const;
     // Yeux qui luisent dans le noir : position monde de chaque œil.
@@ -42,6 +55,9 @@ public:
 
     bool isAlive() const { return state_ != State::Dying; }
     bool isRemovable() const { return removable_; }
+    bool isSlowed() const { return slowTimer_ > 0.0f; }
+    // Vampire qui fuit la lumière.
+    bool isFleeing() const { return fleeing_; }
     Vector3 position() const { return position_; }
     // Centre de la zone touchable (torse).
     Vector3 hitCenter() const;
@@ -55,6 +71,9 @@ public:
 private:
     enum class State { Chasing, Attacking, Dying };
 
+    // Point visé par un vampire : il tourne autour du joueur pour le prendre de dos.
+    Vector3 flankPoint(const EnemySenses& senses) const;
+    float hoverHeight() const;
     Matrix bodyTransform() const;
 
     unsigned id_;
@@ -73,9 +92,14 @@ private:
     float deathTimer_ = 0.0f;
     float groanTimer_;
     float speedJitter_;           // chaque zombie a sa propre allure
+    float slowFraction_ = 0.0f;
+    float slowTimer_ = 0.0f;
+    float age_ = 0.0f;            // secondes depuis l'apparition (flottement des spectres)
+    bool fleeing_ = false;
     bool removable_ = false;
 
     int clipMove_;
+    int clipFlee_;
     int clipAttack_;
     int clipDie_;
     int headNode_;

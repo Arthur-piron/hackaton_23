@@ -149,6 +149,7 @@ Game::Game(const Options& options)
     postFx_ = std::make_unique<PostFx>();
     lighting_ = std::make_unique<Lighting>();
     lighting_->setStaticLights(world_->lights());
+    waves_->setLights(world_->lights());
     world_->setShader(lighting_->shader());
     waves_->setShader(lighting_->shader());
     lighting_->apply(keeperModel_->model());
@@ -363,6 +364,7 @@ void Game::updateLighting(float dt)
     const Vector3 lamp = {position.x + forward.x * kFlashlightForward, position.y + kFlashlightHeight,
                           position.z + forward.z * kFlashlightForward};
     lighting_->aimFlashlight(lamp, {forward.x, -kFlashlightTilt, forward.z});
+    waves_->setFlashlight(true, lamp, forward);
 
     PointLight fill;
     fill.position = Vector3Add(position, {0.0f, kPlayerFillHeight, 0.0f});
@@ -413,7 +415,7 @@ void Game::updatePlaying(float dt)
     zones_->update(dt);
 
     projectiles_.update(dt);
-    const float damage = waves_->update(dt, player_->position(), *world_, *zones_, events_);
+    const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
     resolveProjectiles();
     updateCardEffects(dt);
     economy_.update(dt);
