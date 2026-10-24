@@ -2,6 +2,8 @@
 
 #include "core/AnimatedModel.hpp"
 #include "core/Audio.hpp"
+#include "fx/Particles.hpp"
+#include "fx/PostFx.hpp"
 #include "game/CameraRig.hpp"
 #include "game/Economy.hpp"
 #include "game/Events.hpp"
@@ -57,6 +59,8 @@ private:
     void resolveProjectiles();
     // Fait progresser le combo et lâche l'or et l'XP d'un ennemi qui vient de mourir.
     void rewardKill(const Enemy& enemy);
+    // Balles arrêtées par les murs d'enceinte (étincelles).
+    void resolveWallImpacts();
     void handleEvents();
     void updateFootsteps(float dt);
 
@@ -80,6 +84,8 @@ private:
     std::unique_ptr<Player> player_;
     std::unique_ptr<WaveManager> waves_;
     std::vector<Model> weaponModels_;
+    std::unique_ptr<Particles> particles_;
+    std::unique_ptr<PostFx> postFx_;
     Arsenal arsenal_;
     ProjectileSystem projectiles_;
     Economy economy_;
