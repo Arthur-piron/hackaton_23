@@ -85,6 +85,15 @@ constexpr Color kEyeHaloColor = {255, 70, 20, 200};
 constexpr Color kEyeCoreColor = {255, 200, 120, 255};
 constexpr float kEyeHaloSize = 0.55f;
 constexpr float kEyeCoreSize = 0.14f;
+// Lumières brèves : flash de tir chaud, explosion nécrotique verdâtre.
+constexpr Color kMuzzleLightColor = {255, 196, 120, 255};
+constexpr float kMuzzleLightRange = 8.0f;
+constexpr float kMuzzleLightIntensity = 2.6f;
+constexpr float kMuzzleLightDuration = 0.07f;
+constexpr Color kExplosionLightColor = {170, 255, 120, 255};
+constexpr float kExplosionLightIntensity = 3.0f;
+constexpr float kExplosionLightDuration = 0.35f;
+constexpr float kExplosionLightHeight = 1.0f;
 
 // Sons de tir par arme (indices du catalogue d'Arsenal).
 const char* const kShotSounds[] = {"gun_pistol", "gun_shotgun", "gun_pistol", "gun_rifle"};
@@ -686,7 +695,8 @@ void Game::handleEvents()
             cameraRig_.shake(arsenal_.stats().shake);
             particles_->muzzleFlash(ev.position, ev.direction,
                                     kMuzzleBase + kMuzzleShakeScale * arsenal_.stats().shake);
-            lighting_->muzzleFlash(ev.position);
+            lighting_->flash({ev.position, kMuzzleLightColor, kMuzzleLightRange, kMuzzleLightIntensity, 0.0f, 0.0f},
+                             kMuzzleLightDuration);
             break;
         }
         case EventType::DryFire:
@@ -772,6 +782,9 @@ void Game::handleEvents()
         case EventType::Explosion:
             audio_.playAt("hit_heavy", ev.position, 0.8f, 0.2f);
             cameraRig_.shake(kExplosionShake * std::min(1.0f, ev.value / kNecroticRadius));
+            lighting_->flash({Vector3Add(ev.position, {0.0f, kExplosionLightHeight, 0.0f}), kExplosionLightColor,
+                              ev.value * 2.0f, kExplosionLightIntensity, 0.0f, 0.0f},
+                             kExplosionLightDuration);
             break;
         case EventType::LastStand:
             audio_.play("wave_bell", 0.9f, 0.0f);

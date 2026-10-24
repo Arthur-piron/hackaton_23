@@ -25,10 +25,11 @@ public:
 
     // Lumières fixes du décor.
     void setStaticLights(std::vector<PointLight> lights) { static_ = std::move(lights); }
-    // Lumière ajoutée pour l'image en cours seulement.
+    // Lumière ajoutée pour l'image en cours seulement (à rappeler à chaque image :
+    // lanterne volante, lampe UV...).
     void addLight(const PointLight& light) { dynamic_.push_back(light); }
-    // Flash bref et chaud à la bouche du canon.
-    void muzzleFlash(Vector3 position);
+    // Lumière brève qui s'éteint en `duration` secondes (flash de tir, explosion...).
+    void flash(const PointLight& light, float duration);
 
     // Lampe torche : allumée ou non, intensité 0..1 (batterie faible...).
     void setFlashlight(bool on, float intensity);
@@ -45,6 +46,11 @@ public:
     void endGlow() const;
 
 private:
+    struct Flash {
+        PointLight light;
+        float duration;
+        float left;
+    };
     struct ActiveLight {
         PointLight light;
         float strength;  // intensité après vacillement
@@ -75,8 +81,7 @@ private:
     std::vector<PointLight> dynamic_;
     std::vector<ActiveLight> active_;
     float time_ = 0.0f;
-    float muzzleTimer_ = 0.0f;
-    Vector3 muzzlePosition_ = {0.0f, 0.0f, 0.0f};
+    std::vector<Flash> flashes_;
     bool flashlightOn_ = true;
     float flashlightIntensity_ = 1.0f;
     Vector3 flashlightPosition_ = {0.0f, 1.0f, 0.0f};

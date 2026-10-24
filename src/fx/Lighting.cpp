@@ -26,12 +26,6 @@ constexpr float kFlashlightOuterAngle = 27.0f; // degrés, demi-angle
 constexpr float kFlashlightInnerAngle = 14.0f;
 constexpr float kFlashlightRange = 14.0f;
 
-// Flash de tir : très court, chaud, éclaire tout autour du tireur.
-constexpr Color kMuzzleColor = {255, 196, 120, 255};
-constexpr float kMuzzleDuration = 0.07f;
-constexpr float kMuzzleRange = 8.0f;
-constexpr float kMuzzleIntensity = 2.6f;
-
 // Les lumières plus loin que ça (bord de leur portée) du point suivi sont ignorées.
 constexpr float kCullDistance = 26.0f;
 constexpr int kGlowTextureSize = 64;
@@ -92,10 +86,9 @@ void Lighting::apply(Model& model) const
     for (int i = 0; i < model.materialCount; ++i) model.materials[i].shader = shader_;
 }
 
-void Lighting::muzzleFlash(Vector3 position)
+void Lighting::flash(const PointLight& light, float duration)
 {
-    muzzlePosition_ = position;
-    muzzleTimer_ = kMuzzleDuration;
+    if (duration > 0.0f) flashes_.push_back({light, duration, duration});
 }
 
 void Lighting::setFlashlight(bool on, float intensity)
@@ -123,15 +116,15 @@ float Lighting::flickerAt(const PointLight& light, int index) const
 void Lighting::update(float dt, Vector3 focus)
 {
     time_ += dt;
-    muzzleTimer_ = std::max(0.0f, muzzleTimer_ - dt);
-    if (muzzleTimer_ > 0.0f) {
-        PointLight flash;
-        flash.position = muzzlePosition_;
-        flash.color = kMuzzleColor;
-        flash.range = kMuzzleRange;
-        flash.intensity = kMuzzleIntensity * muzzleTimer_ / kMuzzleDuration;
-        dynamic_.push_back(flash);
+    for (Flash& f : flashes_) {
+        f.left -= dt;
+        if (f.left <= 0.0f) continue;
+        PointLight light = f.light;
+        light.intensity *= f.left / f.duration;
+        dynamic_.push_back(light);
     }
+    flashes_.erase(std::remove_if(flashes_.begin(), flashes_.end(), [](const Flash& f) { return f.left <= 0.0f; }),
+                   flashes_.end());
 
     // Lumières assez proches pour toucher l'écran, les plus proches d'abord.
     active_.clear();
