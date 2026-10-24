@@ -63,6 +63,7 @@ private:
     struct Controls {
         Vector3 move = {0.0f, 0.0f, 0.0f};
         Vector3 aim = {0.0f, 0.0f, 0.0f};
+        Vector3 cursor = {0.0f, 0.0f, 0.0f}; // point du sol sous la souris (mode construction)
         bool sprint = false;
         bool fireHeld = false;
         bool firePressed = false;
@@ -131,6 +132,8 @@ private:
     HudData hudData() const;
     // Point visé : le torse du mort sous le curseur, sinon le curseur projeté à hauteur du canon.
     Vector3 mouseAimPoint() const;
+    // Curseur projeté sur le plan horizontal à la hauteur donnée.
+    Vector3 mouseOnPlane(float height) const;
 
     Options options_;
     int frameCount_ = 0;
