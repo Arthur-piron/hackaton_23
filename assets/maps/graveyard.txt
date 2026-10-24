@@ -15,6 +15,7 @@
 #   spawn   <zone> x z        (point d'apparition des morts, actif quand la zone est ouverte)
 #   merchant x z rotY         (PNJ du marchand, ouvert entre les vagues ; rotY 0 : regarde vers +Z)
 #   mysterybox x z rotY       (emplacement de la boite mystere ; la premiere ligne est celle du depart)
+#   altar   x z               (autel de soin, une fois par vague ; actif quand sa zone est ouverte)
 #
 #                     Mausolee  x[-8,8]   z[-38,-26]
 #   Chapelle x[-30,-14] | Allee x[-14,14] z[-26,-8] | Crypte x[14,30]
@@ -201,6 +202,7 @@ prop graveyard/crypt-large.glb -25 -17 90 2 solid
 prop graveyard/crypt-large-roof.glb -25 -17 90 2 - 4
 prop graveyard/crypt-large-door.glb -20.2 -17 90 2 -
 prop graveyard/altar-stone.glb -18 -17 90 1 solid
+altar -18 -17
 prop graveyard/candle-multiple.glb -18.2 -18.4 0 1 -
 prop graveyard/candle-multiple.glb -18.2 -15.6 0 1 -
 prop graveyard/cross-column.glb -19.4 -21.8 0 1 solid

@@ -59,10 +59,16 @@ struct MysteryBoxDef {
     float yaw = 0.0f;      // degrés
 };
 
+// L'autel de la chapelle : soigne une fois par vague.
+struct AltarDef {
+    Vector3 position = {0.0f, 0.0f, 0.0f};
+};
+
 struct MapData {
     Vector3 playerSpawn = {0.0f, 0.0f, 0.0f};
     std::vector<MerchantDef> merchants;
     std::vector<MysteryBoxDef> mysteryBoxes;
+    std::vector<AltarDef> altars;
     std::vector<PropDef> props;
     std::vector<WallDef> walls;
     std::vector<ZoneDef> zones;
