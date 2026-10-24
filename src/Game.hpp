@@ -101,7 +101,7 @@ private:
     void openShop();
     // Arme prise à la boîte mystère : débloquée, dorée si légendaire, et en main.
     void takeMysteryPrize(const MysteryBox::Prize& prize);
-    // Contenu d'une caisse cassée : or, munitions, pile, ou explosion du tonneau de poudre.
+    // Contenu d'une caisse cassée : bois, ferraille, munitions, bidon, ou explosion du tonneau de poudre.
     void breakCrate(const Crates::Broken& crate);
     void updateShop(float dt);
     void updateTalents(float dt);
