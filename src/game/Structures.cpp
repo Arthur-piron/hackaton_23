@@ -10,17 +10,23 @@
 namespace {
 // Catalogue, dans l'ordre de StructureKind. Coûts : bois / ferraille / or.
 const StructureInfo kCatalog[] = {
-    {"Palissade", BuildCategory::Defenses, 2, 1, 4, 0, 0, 150.0f, kBlocksAll, "graveyard/fence.glb", WHITE, 0},
+    {"Palissade", BuildCategory::Defenses, 2, 1, 4, 0, 0, 150.0f, kBlocksAll, "graveyard/fence.glb", WHITE, 0, false},
     {"Barricade", BuildCategory::Defenses, 2, 1, 6, 2, 0, 300.0f, kBlocksPlayer | kBlocksEnemies,
-     "survival/fence-fortified.glb", WHITE, 0},
+     "survival/fence-fortified.glb", WHITE, 0, false},
     {"Porte", BuildCategory::Defenses, 2, 1, 5, 3, 0, 250.0f, kBlocksEnemies | kBlocksBullets,
-     "graveyard/fence-gate.glb", WHITE, 0},
-    {"Pics", BuildCategory::Traps, 1, 1, 3, 2, 0, 1.0f, 0u, "tower/detail-crystal.glb", {150, 160, 175, 255}, 25},
-    {"Mine", BuildCategory::Traps, 1, 1, 0, 4, 50, 1.0f, 0u, "blaster/grenade-b.glb", WHITE, 1},
-    {"Flaque d'huile", BuildCategory::Traps, 3, 3, 0, 2, 30, 1.0f, 0u, nullptr, WHITE, 1},
-    {"Piège à ours", BuildCategory::Traps, 1, 1, 2, 3, 0, 1.0f, 0u, nullptr, WHITE, 10},
+     "graveyard/fence-gate.glb", WHITE, 0, false},
+    {"Pics", BuildCategory::Traps, 1, 1, 3, 2, 0, 1.0f, 0u, "tower/detail-crystal.glb", {150, 160, 175, 255}, 25, false},
+    {"Mine", BuildCategory::Traps, 1, 1, 0, 4, 50, 1.0f, 0u, "blaster/grenade-b.glb", WHITE, 1, false},
+    {"Flaque d'huile", BuildCategory::Traps, 3, 3, 0, 2, 30, 1.0f, 0u, nullptr, WHITE, 1, false},
+    {"Piège à ours", BuildCategory::Traps, 1, 1, 2, 3, 0, 1.0f, 0u, nullptr, WHITE, 10, false},
     {"Arbalète", BuildCategory::Turrets, 1, 1, 8, 6, 150, 300.0f, kBlocksAll, "tower/tower-square-bottom-a.glb", WHITE,
-     0},
+     0, false},
+    {"Mitrailleuse", BuildCategory::Turrets, 1, 1, 4, 12, 300, 250.0f, kBlocksAll, "tower/tower-square-bottom-b.glb",
+     WHITE, 0, true},
+    {"Générateur", BuildCategory::Utilities, 2, 1, 6, 10, 200, 400.0f, kBlocksAll, "urban/detail-dumpster-closed.glb",
+     WHITE, 0, false},
+    {"Lampadaire", BuildCategory::Utilities, 1, 1, 2, 3, 100, 150.0f, kBlocksPlayer | kBlocksEnemies,
+     "graveyard/lightpost-single.glb", WHITE, 0, true},
 };
 static_assert(sizeof(kCatalog) / sizeof(kCatalog[0]) == static_cast<size_t>(StructureKind::Count),
               "une entrée de catalogue par structure");
@@ -179,6 +185,12 @@ int Structures::countIn(BuildCategory category) const
     return static_cast<int>(std::count_if(items_.begin(), items_.end(), [&](const Item& i) {
         return i.alive && info(i.kind).category == category;
     }));
+}
+
+int Structures::countOf(StructureKind kind) const
+{
+    return static_cast<int>(
+        std::count_if(items_.begin(), items_.end(), [&](const Item& i) { return i.alive && i.kind == kind; }));
 }
 
 int Structures::blockingNear(Vector3 point, float reach) const

@@ -12,7 +12,9 @@ class World;
 // Catégories du mode construction (docs/GAME.md §7.2), dans l'ordre des touches 1 à 4.
 enum class BuildCategory { Defenses, Turrets, Traps, Utilities, Count };
 
-enum class StructureKind { Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, Count };
+enum class StructureKind {
+    Palisade, Barricade, Door, Spikes, Mine, OilSlick, BearTrap, Crossbow, MachineGun, Generator, Lamppost, Count
+};
 
 // Description d'une structure du catalogue (GAME.md §7.3).
 struct StructureInfo {
@@ -28,6 +30,7 @@ struct StructureInfo {
     const char* model; // relatif à assets/models/ ; nul : dessiné par Traps
     Color tint;
     int uses;          // pièges : passages ou prises avant de s'user (0 : sans objet)
+    bool electric;     // ne marche que près d'un générateur qui a du carburant
 };
 
 // État d'un piège posé, mis à jour par Traps.
@@ -42,6 +45,7 @@ struct TrapState {
 struct TurretState {
     float cooldown = 0.0f;
     float yaw = 0.0f; // orientation de l'arme, en radians
+    float fuel = 0.0f; // générateur : bidons dans le réservoir
 };
 
 // Les structures posées par le joueur : collision dans World, rendu (fissurée, en ruine),
@@ -72,6 +76,7 @@ public:
     BoundingBox bounds(int id) const;
     std::vector<int> ids() const;
     int countIn(BuildCategory category) const;
+    int countOf(StructureKind kind) const;
     Vector3 center(int id) const { return items_[static_cast<size_t>(id)].center; }
     TrapState& trap(int id) { return items_[static_cast<size_t>(id)].trap; }
     const TrapState& trap(int id) const { return items_[static_cast<size_t>(id)].trap; }

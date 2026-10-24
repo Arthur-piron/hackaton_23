@@ -251,6 +251,11 @@ Game::Game(const Options& options)
         // Les quatre pièges sur le chemin de la horde ; la flaque est déjà en feu.
         const Vector3 me = player_->position();
         structures_->place(StructureKind::Crossbow, Vector3Add(me, {-2.5f, 0.0f, 1.5f}), false);
+        // Un générateur avec un bidon alimente une mitrailleuse et un lampadaire.
+        const int generator = structures_->place(StructureKind::Generator, Vector3Add(me, {-5.0f, 0.0f, 3.5f}), false);
+        structures_->turret(generator).fuel = 1.0f;
+        structures_->place(StructureKind::MachineGun, Vector3Add(me, {-4.5f, 0.0f, 1.5f}), false);
+        structures_->place(StructureKind::Lamppost, Vector3Add(me, {-2.5f, 0.0f, -1.5f}), false);
         structures_->place(StructureKind::Spikes, Vector3Add(me, {-1.5f, 0.0f, -2.5f}), false);
         structures_->place(StructureKind::Mine, Vector3Add(me, {0.5f, 0.0f, -3.5f}), false);
         structures_->place(StructureKind::BearTrap, Vector3Add(me, {1.5f, 0.0f, -2.5f}), false);
@@ -545,6 +550,7 @@ void Game::updateLighting(float dt)
     if (mysteryBox_) lighting_->addLight(mysteryBox_->light());
     if (altar_) lighting_->addLight(altar_->light());
     for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
+    for (const PointLight& lamp : generator_.lights(*structures_)) lighting_->addLight(lamp);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -598,6 +604,8 @@ void Game::updatePlaying(float dt)
             hud_.announce("FERME", "Revenez entre les vagues", kWaveColor);
         } else if (mysteryBox_ && mysteryBox_->inReach(player_->position())) {
             takeMysteryPrize(mysteryBox_->interact(player_->position(), *zones_, economy_, events_));
+        } else if (generator_.refuelNear(player_->position(), *structures_, economy_, events_)) {
+            // E près d'un générateur : un bidon dans le réservoir.
         } else if (traps_.igniteNear(player_->position(), *structures_)) {
             // E près d'une flaque d'huile : elle s'enflamme.
         } else if (altar_ && altar_->inReach(player_->position())) {
@@ -923,7 +931,9 @@ bool Game::updateBase(float dt, const Controls& c)
     for (const Traps::Blast& blast : trapped.blasts) {
         explode(blast.center, blast.radius, blast.damage, blast.knockback, 0.0f, kPowderColor);
     }
-    for (const Turrets::Hit& hit : turrets_->update(dt, *structures_, waves_->enemies(), *world_, events_)) {
+    generator_.update(dt, waves_->phase() == WaveManager::Phase::Fighting, *structures_, waves_->enemies(), events_);
+    for (const Turrets::Hit& hit :
+         turrets_->update(dt, *structures_, waves_->enemies(), *world_, generator_, events_)) {
         damageEnemy(*hit.enemy, hit.damage, hit.direction, kTurretKnockback, HitKind::Normal, true);
     }
     if (player_->isDead()) {
@@ -944,6 +954,7 @@ void Game::drawBase() const
     structures_->draw();
     traps_.draw(*structures_);
     turrets_->draw(*structures_);
+    generator_.draw(*structures_);
     buildMode_.drawWorld(*structures_);
 }
 
@@ -1257,7 +1268,18 @@ void Game::handleEvents()
                           ev.position, 0.6f, 0.2f);
             break;
         case EventType::TurretFired:
-            audio_.playAt("reload", ev.position, 0.45f, 0.2f);
+            if (static_cast<StructureKind>(static_cast<int>(ev.value)) == StructureKind::MachineGun) {
+                audio_.playAt("gun_pistol", ev.position, 0.25f, 0.15f);
+            } else {
+                audio_.playAt("reload", ev.position, 0.45f, 0.2f);
+            }
+            break;
+        case EventType::GeneratorRefueled:
+            audio_.playAt("pickup", ev.position, 0.8f, 0.0f);
+            break;
+        case EventType::GeneratorEmpty:
+            audio_.playAt("dry_fire", ev.position, 0.9f, 0.0f);
+            hud_.announce("GÉNÉRATEUR À SEC !", "Verse un bidon (E) pour rallumer les défenses", kWaveColor);
             break;
         case EventType::StructureDamaged:
             audio_.playAt("hit_wood", ev.position, 0.5f, 0.2f);
@@ -1390,6 +1412,7 @@ void Game::draw() const
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Playing) {
             structures_->drawHealthBars(cameraRig_.camera(), player_->position());
+            generator_.drawPrompt(cameraRig_.camera(), player_->position(), *structures_, economy_);
             buildMode_.drawPrompt(cameraRig_.camera());
             buildBar_.draw(buildMode_, economy_);
         }

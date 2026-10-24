@@ -25,6 +25,7 @@ constexpr float kSpawnClearance = 3.0f;
 constexpr float kKeepClearDistance = 2.0f;
 constexpr float kPlayerClearance = 0.45f;
 constexpr float kSellRefund = 0.5f;
+constexpr int kMaxLamps = 8;
 
 constexpr Color kCostColor = {235, 225, 200, 255};
 constexpr Color kRefusalColor = {255, 110, 100, 255};
@@ -155,6 +156,13 @@ void BuildMode::update(Vector3 cursor, bool intermission, const Surroundings& ar
     refusal_ = list.empty() ? std::string("Bientôt disponible") : checkPlacement(ghost_, around, economy);
     if (refusal_.empty() && category_ == BuildCategory::Traps && structures.countIn(BuildCategory::Traps) >= Traps::kMaxTraps) {
         refusal_ = TextFormat("Au plus %d pièges", Traps::kMaxTraps);
+    }
+    // Limites de GAME.md §7.2 : un générateur, huit lampadaires.
+    if (refusal_.empty() && selected_ == StructureKind::Generator && structures.countOf(StructureKind::Generator) >= 1) {
+        refusal_ = "Un seul générateur";
+    }
+    if (refusal_.empty() && selected_ == StructureKind::Lamppost && structures.countOf(StructureKind::Lamppost) >= kMaxLamps) {
+        refusal_ = TextFormat("Au plus %d lampadaires", kMaxLamps);
     }
     const int turretLimit = Turrets::limit(static_cast<int>(around.zones.openAreas().size()));
     if (refusal_.empty() && category_ == BuildCategory::Turrets && structures.countIn(BuildCategory::Turrets) >= turretLimit) {
