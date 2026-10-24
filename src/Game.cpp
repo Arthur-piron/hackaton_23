@@ -384,7 +384,12 @@ Vector3 Game::mouseAimPoint() const
     }
     if (onEnemy) return target;
     // Sinon, le curseur est projeté à hauteur du canon : les balles volent là, pas au ras du sol.
-    const float height = player_->muzzle().y;
+    return mouseOnPlane(player_->muzzle().y);
+}
+
+Vector3 Game::mouseOnPlane(float height) const
+{
+    const Ray ray = GetScreenToWorldRay(GetMousePosition(), cameraRig_.camera());
     if (std::fabs(ray.direction.y) < 1e-4f) return player_->position();
     const float t = (height - ray.position.y) / ray.direction.y;
     return {ray.position.x + ray.direction.x * t, height, ray.position.z + ray.direction.z * t};
@@ -395,6 +400,7 @@ Game::Controls Game::readControls() const
     Controls c;
     c.move = readMoveKeys();
     c.aim = mouseAimPoint();
+    c.cursor = mouseOnPlane(0.0f);
     c.sprint = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     c.fireHeld = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     c.firePressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
@@ -910,7 +916,7 @@ bool Game::updateBase(float dt, const Controls& c)
     if (merchant_) around.keepClear.push_back(merchant_->position());
     if (mysteryBox_) around.keepClear.push_back(mysteryBox_->position());
     if (altar_) around.keepClear.push_back(altar_->position());
-    buildMode_.update(c.aim, waves_->phase() == WaveManager::Phase::Intermission, around, *structures_, economy_,
+    buildMode_.update(c.cursor, waves_->phase() == WaveManager::Phase::Intermission, around, *structures_, economy_,
                       events_);
     return buildMode_.isActive();
 }
