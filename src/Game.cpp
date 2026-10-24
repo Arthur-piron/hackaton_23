@@ -184,8 +184,9 @@ Game::Game(const Options& options)
             cards_.take(card);
         }
         applyCardModifiers();
+        musicDirector_.startNight(audio_); // vérifie aussi le chargement des pistes
     } else {
-        audio_.playMusic("menu.ogg", 0.45f);
+        musicDirector_.menu(audio_);
     }
 }
 
@@ -338,7 +339,7 @@ void Game::update(float dt)
     case State::Menu:
         if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             startNewGame();
-            audio_.playMusic("night_ambience.ogg", 0.6f);
+            musicDirector_.startNight(audio_);
             state_ = State::Playing;
         }
         break;
@@ -358,7 +359,7 @@ void Game::update(float dt)
     case State::Paused:
         if (IsKeyPressed(KEY_ESCAPE)) state_ = State::Playing;
         if (IsKeyPressed(KEY_Q) && IsKeyDown(KEY_LEFT_CONTROL)) {
-            audio_.playMusic("menu.ogg", 0.45f);
+            musicDirector_.menu(audio_);
             state_ = State::Menu;
         }
         break;
@@ -367,10 +368,10 @@ void Game::update(float dt)
         cameraRig_.update(dt, player_->position());
         if (IsKeyPressed(KEY_ENTER)) {
             startNewGame();
-            audio_.playMusic("night_ambience.ogg", 0.6f);
+            musicDirector_.startNight(audio_);
             state_ = State::Playing;
         } else if (IsKeyPressed(KEY_ESCAPE)) {
-            audio_.playMusic("menu.ogg", 0.45f);
+            musicDirector_.menu(audio_);
             state_ = State::Menu;
         }
         break;
@@ -485,6 +486,10 @@ void Game::updatePlaying(float dt)
         : Vector3{0.0f, 0.0f, 0.0f};
     cameraRig_.update(dt, player_->position(), lookAhead);
     audio_.setListener(player_->position());
+    const int aliveEnemies = static_cast<int>(std::count_if(waves_->enemies().begin(), waves_->enemies().end(),
+                                                              [](const Enemy& e) { return e.isAlive(); }));
+    musicDirector_.update(dt, audio_, aliveEnemies, waves_->phase() == WaveManager::Phase::Intermission,
+                          waves_->wave(), 0);
     updateFootsteps(dt);
     handleEvents();
 
