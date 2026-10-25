@@ -178,11 +178,13 @@ void Game::loadCharacter(CharacterId id)
 Game::Game(const Options& options)
     : options_(options)
 {
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
+    // --smoke ne se cale ni sur l'écran ni sur une limite d'images : le profil mesure le vrai coût.
+    const bool smoke = options_.smokeFrames > 0;
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | (smoke ? 0u : FLAG_VSYNC_HINT));
     InitWindow(kScreenWidth, kScreenHeight, kWindowTitle);
     fonts::load();
     InitAudioDevice();
-    SetTargetFPS(kTargetFps);
+    SetTargetFPS(smoke ? 0 : kTargetFps);
     SetExitKey(KEY_NULL); // Échap sert à la pause, pas à quitter.
     HideCursor();         // remplacé par le réticule du HUD
 
@@ -338,12 +340,21 @@ void Game::run()
     while (!WindowShouldClose() && !quitRequested_) {
         // En --smoke, la simulation avance à pas fixe : même durée simulée quelle que soit la machine.
         const float dt = options_.smokeFrames > 0 ? kSmokeFrameTime : std::min(GetFrameTime(), kMaxFrameTime);
-        update(dt);
-        draw();
+        {
+            Profiler::Scope scope(profiler_, "update");
+            update(dt);
+        }
+        {
+            // Inclut l'attente du GPU (EndDrawing échange les tampons).
+            Profiler::Scope scope(profiler_, "draw+gpu");
+            draw();
+        }
+        profiler_.endFrame();
 
         ++frameCount_;
         if (options_.smokeFrames > 0 && frameCount_ >= options_.smokeFrames) {
             if (!options_.smokeScreenshot.empty()) TakeScreenshot(options_.smokeScreenshot.c_str());
+            profiler_.report();
             break;
         }
     }
@@ -1491,8 +1502,11 @@ void Game::draw() const
         postFx_->begin();
         ClearBackground(lighting_->backgroundColor());
         drawWorld();
-        postFx_->end();
-        postFx_->draw();
+        {
+            Profiler::Scope scope(profiler_, "postfx");
+            postFx_->end();
+            postFx_->draw();
+        }
         const bool intermission = waves_->phase() == WaveManager::Phase::Intermission;
         if (state_ == State::Playing && !player_->isDead()) {
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
@@ -1505,7 +1519,10 @@ void Game::draw() const
         }
         waves_->drawEliteNames(cameraRig_.camera(), player_->position());
         waves_->drawBossBar();
-        hud_.draw(cameraRig_.camera(), hudData());
+        {
+            Profiler::Scope scope(profiler_, "hud");
+            hud_.draw(cameraRig_.camera(), hudData());
+        }
         if (state_ == State::Playing) {
             structures_->drawHealthBars(cameraRig_.camera(), player_->position());
             generator_.drawPrompt(cameraRig_.camera(), player_->position(), *structures_, economy_);
@@ -1528,23 +1545,44 @@ void Game::draw() const
 void Game::drawWorld() const
 {
     BeginMode3D(cameraRig_.camera());
-    world_->draw(cameraRig_.camera());
-    zones_->draw();
-    if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
-    if (mysteryBox_) mysteryBox_->draw(weaponModels_);
-    crates_->draw();
-    drawBase();
-    waves_->draw();
-    cardEffects_.draw(waves_->enemies());
-    const int weapon = arsenal_.current();
-    player_->draw(mysteryBox_ && arsenal_.isLegendary(weapon) ? &mysteryBox_->goldenWeapon(weapon)
-                                                              : &weaponModels_[static_cast<size_t>(weapon)]);
-    projectiles_.draw();
-    drawEyes();
-    flyingLanterns_.draw(lanternModel_);
-    pickups_.draw();
-    particles_->draw(cameraRig_.camera());
-    lighting_->drawHalos(cameraRig_.camera());
+    {
+        Profiler::Scope scope(profiler_, "w.decor");
+        world_->draw(cameraRig_.camera());
+        zones_->draw();
+        if (merchant_) merchant_->draw(waves_->phase() == WaveManager::Phase::Intermission);
+        if (mysteryBox_) mysteryBox_->draw(weaponModels_);
+        crates_->draw();
+        drawBase();
+    }
+    {
+        Profiler::Scope scope(profiler_, "w.enemies");
+        waves_->draw();
+        cardEffects_.draw(waves_->enemies());
+    }
+    {
+        Profiler::Scope scope(profiler_, "w.player");
+        const int weapon = arsenal_.current();
+        player_->draw(mysteryBox_ && arsenal_.isLegendary(weapon) ? &mysteryBox_->goldenWeapon(weapon)
+                                                                  : &weaponModels_[static_cast<size_t>(weapon)]);
+        projectiles_.draw();
+        flyingLanterns_.draw(lanternModel_);
+    }
+    {
+        Profiler::Scope scope(profiler_, "w.eyes");
+        drawEyes();
+    }
+    {
+        Profiler::Scope scope(profiler_, "w.pickups");
+        pickups_.draw();
+    }
+    {
+        Profiler::Scope scope(profiler_, "w.particles");
+        particles_->draw(cameraRig_.camera());
+    }
+    {
+        Profiler::Scope scope(profiler_, "w.halos");
+        lighting_->drawHalos(cameraRig_.camera());
+    }
     EndMode3D();
 }
 

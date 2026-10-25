@@ -2,6 +2,7 @@
 
 #include "core/AnimatedModel.hpp"
 #include "core/Audio.hpp"
+#include "core/Profiler.hpp"
 #include "fx/Lighting.hpp"
 #include "fx/Particles.hpp"
 #include "fx/PostFx.hpp"
@@ -202,6 +203,7 @@ private:
     bool quitRequested_ = false;     // « Quitter » dans le menu
     int bonesEarned_ = 0;          // ossements gagnés par la partie qui vient de finir
     EventQueue events_;
+    mutable Profiler profiler_;  // --smoke : coût de chaque section d'une image
 
     int score_ = 0;
     int kills_ = 0;
