@@ -30,6 +30,7 @@ constexpr float kFlashlightHalfAngle = 27.0f * DEG2RAD;
 constexpr float kLightAvoidFraction = 0.7f;
 // Le boss d'une vague arrive quelques secondes après l'annonce de la vague.
 constexpr float kBossSpawnDelay = 4.0f;
+constexpr float kSummonRadius = 3.2f;
 // Élites : anneau pulsant au sol, lueur colorée et nom au-dessus de la tête.
 constexpr float kEliteRingRadius = 0.75f;
 constexpr float kEliteRingHeight = 0.03f;
@@ -162,7 +163,7 @@ void WaveManager::startWave(EventQueue& events)
     toSpawn_ = waveQuota(wave_);
     if (event_ == WaveEvent::Horde) toSpawn_ *= waveEvents::kHordeQuotaMultiplier;
     spawnTimer_ = 0.0f;
-    bossDelay_ = wave_ % boss::kBossCycle == boss::kGravediggerWave ? kBossSpawnDelay : -1.0f;
+    bossDelay_ = boss::waveBoss(wave_, bossType_) ? kBossSpawnDelay : -1.0f;
     events.push_back({EventType::WaveStarted, {0.0f, 0.0f, 0.0f}, static_cast<float>(wave_)});
 }
 
@@ -254,6 +255,18 @@ void WaveManager::spawnEnemy(Vector3 playerPosition, const World& world, const Z
     enemy.makeElite(rollElite(wave_, eliteChance_));
 }
 
+void WaveManager::summonWalkers(Vector3 center, int count, const World& world)
+{
+    for (int i = 0; i < count; ++i) {
+        const float angle = 2.0f * PI * static_cast<float>(i) / static_cast<float>(count);
+        const Vector3 at = {center.x + std::cos(angle) * kSummonRadius, 0.0f,
+                            center.z + std::sin(angle) * kSummonRadius};
+        enemies_.emplace_back(nextId_++, EnemyType::Walker, *models_[static_cast<size_t>(EnemyType::Walker)],
+                              world.resolveCircle(at, kSpawnClearance));
+        enemies_.back().scaleHealth(healthMultiplier_);
+    }
+}
+
 Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition, const World& world, const Zones& zones) const
 {
     // Au hasard parmi les entrées assez loin du joueur ; à défaut, la plus éloignée.
@@ -315,8 +328,12 @@ void WaveManager::separate(float dt)
             const float dist = std::sqrt(distSq);
             const float overlap = (minDistance - dist) * std::min(1.0f, kSeparationStrength * dt * 10.0f) * 0.5f;
             const Vector3 n = {dx / dist, 0.0f, dz / dist};
-            enemies_[i].push(Vector3Scale(n, -overlap));
-            enemies_[j].push(Vector3Scale(n, overlap));
+            // Un boss ne se laisse pas pousser par les morts ordinaires : il les écarte.
+            const bool bossI = enemies_[i].isBoss();
+            const bool bossJ = enemies_[j].isBoss();
+            const float shareI = bossI == bossJ ? 1.0f : (bossI ? 0.0f : 2.0f);
+            enemies_[i].push(Vector3Scale(n, -overlap * shareI));
+            enemies_[j].push(Vector3Scale(n, overlap * (2.0f - shareI)));
         }
     }
 }
@@ -345,7 +362,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
     if (bossDelay_ >= 0.0f) {
         bossDelay_ -= dt;
         if (bossDelay_ < 0.0f) {
-            const EnemyType type = EnemyType::Gravedigger;
+            const EnemyType type = bossType_;
             enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
                                   pickSpawnPoint(playerPosition, world, zones));
             enemies_.back().scaleHealth(healthMultiplier_);
@@ -353,7 +370,9 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
         }
     }
 
-    float damage = bosses_.update(dt, enemies_, playerPosition, events);
+    const BossUpdate bossUpdate = bosses_.update(dt, enemies_, playerPosition, events);
+    if (bossUpdate.summons > 0) summonWalkers(bossUpdate.summonCenter, bossUpdate.summons, world);
+    float damage = bossUpdate.damage;
     // Chaque mort marche vers le joueur, ou vers la grille qui mène à sa zone.
     for (Enemy& e : enemies_) damage += e.update(dt, sense(e, playerPosition, playerForward, zones), events);
     separate(dt);

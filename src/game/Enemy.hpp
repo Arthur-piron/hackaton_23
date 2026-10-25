@@ -5,7 +5,7 @@
 #include "game/Events.hpp"
 #include "raylib.h"
 
-enum class EnemyType { Walker, Runner, Skeleton, Brute, Vampire, Ghost, Gravedigger, Count };
+enum class EnemyType { Walker, Runner, Skeleton, Brute, Vampire, Ghost, Gravedigger, Gnawed, Count };
 
 struct EnemyStats {
     const char* name;
@@ -48,8 +48,12 @@ public:
     bool hit(float damage, Vector3 direction, float knockback, EventQueue& events);
     // En fait une élite (à l'apparition) : plus de vie, halo, effet du modificateur.
     void makeElite(EliteKind kind);
-    // Joue une animation d'action (lancer...) : il s'arrête et fait face au joueur jusqu'à la fin.
-    void gesture(const char* clip, float speed);
+    // Joue une animation d'action (lancer, cri...) : il cesse de marcher et fait face au joueur.
+    // duration > 0 : l'animation boucle pendant ce temps ; sinon l'action dure le temps de l'animation.
+    // Une action en boucle garde son orientation (voir face).
+    void gesture(const char* clip, float speed, float duration = 0.0f);
+    // Tourne immédiatement le mort dans cette direction (charge d'un boss...).
+    void face(Vector3 direction);
     // Ralentit de `fraction` (0..1) pendant `duration` secondes ; le plus fort ralentissement l'emporte.
     void slow(float fraction, float duration);
     void push(Vector3 offset);
@@ -61,7 +65,7 @@ public:
 
     bool isAlive() const { return state_ != State::Dying; }
     bool isRemovable() const { return removable_; }
-    bool isBoss() const { return type_ == EnemyType::Gravedigger; }
+    bool isBoss() const { return type_ == EnemyType::Gravedigger || type_ == EnemyType::Gnawed; }
     bool isGesturing() const { return state_ == State::Gesturing; }
     bool isSlowed() const { return slowTimer_ > 0.0f; }
     // Vampire qui fuit la lumière.
@@ -102,6 +106,8 @@ private:
     float maxHealth_;
     EliteKind elite_ = EliteKind::None;
     float sinceHit_ = 0.0f;       // secondes depuis le dernier coup (régénération)
+    float gestureLeft_ = 0.0f;    // action en boucle : temps restant
+    bool gestureTimed_ = false;   // faux : l'action dure le temps de son animation
     float flash_ = 0.0f;          // éclat blanc quand l'ennemi est touché
     float attackCooldown_ = 0.0f;
     bool attackDealt_ = false;

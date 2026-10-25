@@ -61,10 +61,13 @@ constexpr int kFortuneComboMultiplier = 5;
 constexpr int kFortuneCoins = 50;
 constexpr int kFortuneGoldPerCoin = 5;
 constexpr float kExplosionShake = 0.35f;
-// Boss : annonce et pierres tombales du Fossoyeur.
+// Boss : annonce, pierres tombales et frappe au sol, poussière de la charge du Rongé.
 constexpr Color kBossColor = {230, 60, 45, 255};
-constexpr Color kTombstoneDebrisColor = {150, 150, 160, 255};
-constexpr int kTombstoneDebrisChunks = 16;
+constexpr Color kBossDebrisColor = {150, 150, 160, 255};
+constexpr int kBossDebrisChunks = 16;
+constexpr Color kTrampleDustColor = {120, 95, 70, 255};
+constexpr int kTrampleDustChunks = 4;
+constexpr float kTrampleShake = 0.08f;
 constexpr float kFrostSlow = 0.3f;
 constexpr float kFrostDuration = 1.5f;
 
@@ -645,11 +648,18 @@ void Game::updatePlaying(float dt)
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
-    // Pierres tombales du Fossoyeur : dégâts à la structure dans la zone d'impact (indices : damage publie).
+    // Boss : impacts et charge du Rongé abîment les structures (indices : damage publie des événements).
     for (size_t i = 0, count = events_.size(); i < count; ++i) {
-        if (events_[i].type != EventType::TombstoneImpact) continue;
-        const int id = structures_->blockingNear(events_[i].position, events_[i].value);
-        if (id >= 0) structures_->damage(id, boss::kTombstoneStructureDamage, events_);
+        const Event ev = events_[i];
+        if (ev.type != EventType::BossImpact && ev.type != EventType::BossTrample) continue;
+        const int id = structures_->blockingNear(ev.position, ev.value);
+        if (id < 0) continue;
+        float amount = boss::kImpactStructureDamage;
+        if (ev.type == EventType::BossTrample) {
+            amount = structures_->level(id) <= boss::kTrampleDestroyMaxLevel ? boss::kTrampleDestroyDamage
+                                                                            : boss::kTrampleDamage;
+        }
+        structures_->damage(id, amount, events_);
     }
     resolveProjectiles();
     for (const Flashlight::LightTick& tick :
@@ -1280,12 +1290,16 @@ void Game::handleEvents()
             audio_.play("wave_bell", 1.0f, 0.0f);
             cameraRig_.shake(kDeathShake);
             hud_.announce(enemyStats(static_cast<EnemyType>(static_cast<int>(ev.value))).name,
-                          "Il vient creuser vos tombes...", kBossColor);
+                          boss::tagline(static_cast<EnemyType>(static_cast<int>(ev.value))), kBossColor);
             break;
-        case EventType::TombstoneImpact:
-            particles_->debris(ev.position, kTombstoneDebrisColor, kTombstoneDebrisChunks);
+        case EventType::BossImpact:
+            particles_->debris(ev.position, kBossDebrisColor, kBossDebrisChunks);
             audio_.playAt("hit_heavy", ev.position, 1.0f, 0.15f);
-            cameraRig_.shake(kExplosionShake);
+            cameraRig_.shake(kExplosionShake * std::min(1.0f, ev.value / kNecroticRadius));
+            break;
+        case EventType::BossTrample:
+            particles_->debris(ev.position, kTrampleDustColor, kTrampleDustChunks);
+            cameraRig_.shake(kTrampleShake);
             break;
         case EventType::LastStand:
             audio_.play("wave_bell", 0.9f, 0.0f);
