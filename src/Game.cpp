@@ -369,7 +369,7 @@ void Game::startNewGame()
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
-    waves_->setRules(gameModeRules(mode_).endless, gameModeRules(mode_).enemyHealth);
+    waves_->setRules(gameModeRules(mode_).endless, gameModeRules(mode_).enemyHealth, gameModeRules(mode_).eliteChance);
     projectiles_.clear();
     economy_.reset();
     economy_.addGold(progression_->startGold());
@@ -561,6 +561,7 @@ void Game::updateLighting(float dt)
     if (altar_) lighting_->addLight(altar_->light());
     for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
     for (const PointLight& electric : generator_.lights(*structures_)) lighting_->addLight(electric);
+    for (const PointLight& elite : waves_->eliteLights()) lighting_->addLight(elite);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -1093,7 +1094,8 @@ void Game::endRun(bool victory)
 {
     // Une vague est « survécue » quand elle est terminée : celle en cours ne compte pas.
     const int survived = victory ? waves_->wave() : waves_->wave() - 1;
-    bonesEarned_ = progression_->finishRun(mode_, survived, score_, victory);
+    // Les ossements des élites sont déjà comptés dans bonesEarned_.
+    bonesEarned_ += progression_->finishRun(mode_, survived, score_, victory);
     state_ = victory ? State::Victory : State::GameOver;
 }
 
@@ -1101,8 +1103,13 @@ void Game::rewardKill(const Enemy& enemy, bool byDefense)
 {
     const CardModifiers& m = cards_.modifiers();
     const int multiplierBefore = economy_.comboMultiplier();
-    const Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
+    Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
     if (byDefense) ++defenseKills_;
+    if (enemy.isElite()) {
+        reward.gold *= elites::kRewardMultiplier;
+        reward.xp *= elites::kRewardMultiplier;
+        rewardElite(enemy);
+    }
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
     const Economy::Salvage salvage = Economy::rollSalvage(enemy.type());
@@ -1117,6 +1124,17 @@ void Game::rewardKill(const Enemy& enemy, bool byDefense)
     if (m.deadMansFortune && multiplierBefore < kFortuneComboMultiplier &&
         economy_.comboMultiplier() >= kFortuneComboMultiplier) {
         pickups_.spawnCoinRain(player_->position(), kFortuneCoins, kFortuneGoldPerCoin);
+    }
+}
+
+void Game::rewardElite(const Enemy& enemy)
+{
+    const int bones = GetRandomValue(elites::kMinBones, elites::kMaxBones);
+    progression_->addBones(bones);
+    bonesEarned_ += bones;
+    if (enemy.elite() == EliteKind::Explosive) {
+        explode(enemy.position(), elites::kExplosionRadius, elites::kExplosionDamage, elites::kExplosionKnockback,
+                elites::kExplosionDamage, eliteInfo(EliteKind::Explosive).color);
     }
 }
 
@@ -1437,6 +1455,7 @@ void Game::draw() const
                                    player_->health() < player_->maxHealth(), *zones_);
             }
         }
+        waves_->drawEliteNames(cameraRig_.camera(), player_->position());
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Playing) {
             structures_->drawHealthBars(cameraRig_.camera(), player_->position());

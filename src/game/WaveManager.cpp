@@ -1,6 +1,7 @@
 #include "game/WaveManager.hpp"
 
 #include "core/AssetPath.hpp"
+#include "core/Fonts.hpp"
 #include "game/FlowField.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
@@ -27,6 +28,16 @@ constexpr float kFlashlightRange = 14.0f;
 constexpr float kFlashlightHalfAngle = 27.0f * DEG2RAD;
 // Les vampires évitent le cœur des lumières du décor (fraction de leur portée).
 constexpr float kLightAvoidFraction = 0.7f;
+// Élites : anneau pulsant au sol, lueur colorée et nom au-dessus de la tête.
+constexpr float kEliteRingRadius = 0.75f;
+constexpr float kEliteRingHeight = 0.03f;
+constexpr float kElitePulseSpeed = 4.0f;
+constexpr float kEliteLightHeight = 1.2f;
+constexpr float kEliteLightRange = 3.5f;
+constexpr float kEliteLightIntensity = 1.4f;
+constexpr float kEliteNameHeight = 2.3f;     // au-dessus des pieds, × l'échelle du mort
+constexpr float kEliteNameDistance = 14.0f;  // au-delà, le nom n'est pas affiché
+constexpr int kEliteNameSize = 16;
 
 // Probabilité d'apparition (en %) d'un type : base + parVague × vague, à partir de premièreVague.
 // Le reste des tirages donne des marcheurs.
@@ -120,10 +131,11 @@ void WaveManager::spawnRing(Vector3 center, float radius, int count, EnemyType t
     }
 }
 
-void WaveManager::setRules(bool endless, float healthMultiplier)
+void WaveManager::setRules(bool endless, float healthMultiplier, float eliteChance)
 {
     endless_ = endless;
     healthMultiplier_ = healthMultiplier;
+    eliteChance_ = eliteChance;
 }
 
 void WaveManager::startWave(EventQueue& events)
@@ -278,6 +290,7 @@ void WaveManager::separate(float dt)
 float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForward, const World& world,
                           const Zones& zones, EventQueue& events)
 {
+    time_ += dt;
     if (phase_ == Phase::Intermission && !cleared_) {
         timer_ -= dt;
         if (timer_ <= 0.0f) startWave(events);
@@ -293,6 +306,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
             enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
                                   pickSpawnPoint(playerPosition, world, zones));
             enemies_.back().scaleHealth(healthMultiplier_);
+            enemies_.back().makeElite(rollElite(wave_, eliteChance_));
             --toSpawn_;
         }
     }
@@ -320,7 +334,46 @@ void WaveManager::draw() const
     for (const Enemy& e : enemies_) {
         if (!e.stats().ethereal) e.draw();
     }
+    const float pulse = 0.5f + 0.5f * std::sin(time_ * kElitePulseSpeed);
+    for (const Enemy& e : enemies_) {
+        if (!e.isElite() || !e.isAlive()) continue;
+        const Color color = eliteInfo(e.elite()).color;
+        const Vector3 ground = {e.position().x, kEliteRingHeight, e.position().z};
+        const float radius = kEliteRingRadius * e.stats().scale;
+        DrawCylinder(ground, radius, radius, 0.0f, 24, ColorAlpha(color, 0.12f + 0.12f * pulse));
+        DrawCircle3D(ground, radius * (1.0f + 0.1f * pulse), {1.0f, 0.0f, 0.0f}, 90.0f, ColorAlpha(color, 0.9f));
+    }
     for (const Enemy& e : enemies_) {
         if (e.stats().ethereal) e.draw();
+    }
+}
+
+std::vector<PointLight> WaveManager::eliteLights() const
+{
+    std::vector<PointLight> lights;
+    for (const Enemy& e : enemies_) {
+        if (!e.isElite() || !e.isAlive()) continue;
+        PointLight light;
+        light.position = Vector3Add(e.position(), {0.0f, kEliteLightHeight, 0.0f});
+        light.color = eliteInfo(e.elite()).color;
+        light.range = kEliteLightRange * e.stats().scale;
+        light.intensity = kEliteLightIntensity;
+        lights.push_back(light);
+    }
+    return lights;
+}
+
+void WaveManager::drawEliteNames(const Camera3D& camera, Vector3 playerPosition) const
+{
+    for (const Enemy& e : enemies_) {
+        if (!e.isElite() || !e.isAlive()) continue;
+        if (Vector3Distance(e.position(), playerPosition) > kEliteNameDistance) continue;
+        const Vector3 above = Vector3Add(e.position(), {0.0f, kEliteNameHeight * e.stats().scale, 0.0f});
+        const Vector2 screen = GetWorldToScreen(above, camera);
+        const std::string name = eliteName(e.type(), e.elite());
+        const int x = static_cast<int>(screen.x) - fonts::measureText(name.c_str(), kEliteNameSize) / 2;
+        const int y = static_cast<int>(screen.y);
+        fonts::drawText(name.c_str(), x + 1, y + 1, kEliteNameSize, {0, 0, 0, 200});
+        fonts::drawText(name.c_str(), x, y, kEliteNameSize, eliteInfo(e.elite()).color);
     }
 }

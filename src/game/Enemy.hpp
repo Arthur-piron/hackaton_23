@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/AnimatedModel.hpp"
+#include "game/Elites.hpp"
 #include "game/Events.hpp"
 #include "raylib.h"
 
@@ -44,6 +45,8 @@ public:
     float update(float dt, const EnemySenses& senses, EventQueue& events);
     // Inflige des dégâts ; renvoie vrai si l'ennemi vient de mourir.
     bool hit(float damage, Vector3 direction, float knockback, EventQueue& events);
+    // En fait une élite (à l'apparition) : plus de vie, halo, effet du modificateur.
+    void makeElite(EliteKind kind);
     // Ralentit de `fraction` (0..1) pendant `duration` secondes ; le plus fort ralentissement l'emporte.
     void slow(float fraction, float duration);
     void push(Vector3 offset);
@@ -64,7 +67,10 @@ public:
     float radius() const;
     float health() const { return health_; }
     // Mode Cauchemar : multiplie la vie d'un mort qui vient d'apparaître.
-    void scaleHealth(float factor) { health_ *= factor; }
+    void scaleHealth(float factor);
+    float maxHealth() const { return maxHealth_; }
+    EliteKind elite() const { return elite_; }
+    bool isElite() const { return elite_ != EliteKind::None; }
     EnemyType type() const { return type_; }
     const EnemyStats& stats() const { return enemyStats(type_); }
     // Identifiant unique (stable même si le tableau des ennemis est réorganisé).
@@ -88,6 +94,9 @@ private:
     Vector3 knockback_ = {0.0f, 0.0f, 0.0f};
     float yaw_ = 0.0f;
     float health_;
+    float maxHealth_;
+    EliteKind elite_ = EliteKind::None;
+    float sinceHit_ = 0.0f;       // secondes depuis le dernier coup (régénération)
     float flash_ = 0.0f;          // éclat blanc quand l'ennemi est touché
     float attackCooldown_ = 0.0f;
     bool attackDealt_ = false;

@@ -32,6 +32,10 @@ public:
     float update(float dt, Vector3 playerPosition, Vector3 playerForward, const World& world, const Zones& zones,
                  EventQueue& events);
     void draw() const;
+    // Noms des élites au-dessus de leur tête (2D, après la scène 3D).
+    void drawEliteNames(const Camera3D& camera, Vector3 playerPosition) const;
+    // Lueur colorée de chaque élite, à ajouter à l'éclairage à chaque image.
+    std::vector<PointLight> eliteLights() const;
     // Fait passer les modèles des morts par ce shader (éclairage de nuit).
     void setShader(const Shader& shader);
     // Passe immédiatement à la vague suivante pendant la pause.
@@ -44,8 +48,8 @@ public:
     void setFlowField(const FlowField* field) { flowField_ = field; }
     // Fait apparaître un cercle d'ennemis autour d'un point (tests automatiques).
     void spawnRing(Vector3 center, float radius, int count, EnemyType type);
-    // Règles du mode de jeu : endless = pas de victoire à la vague 10 ; vie des morts multipliée.
-    void setRules(bool endless, float healthMultiplier);
+    // Règles du mode de jeu : endless = pas de victoire à la vague 10 ; vie des morts et chance d'élite multipliées.
+    void setRules(bool endless, float healthMultiplier, float eliteChance);
 
     std::vector<Enemy>& enemies() { return enemies_; }
     const std::vector<Enemy>& enemies() const { return enemies_; }
@@ -83,5 +87,7 @@ private:
     bool cleared_ = false;
     bool endless_ = false;
     float healthMultiplier_ = 1.0f;
+    float eliteChance_ = 1.0f;
+    float time_ = 0.0f;           // pulsation des halos d'élite
     unsigned nextId_ = 1;
 };
