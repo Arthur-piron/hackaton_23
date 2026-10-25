@@ -163,7 +163,7 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
     slowTimer_ = std::max(0.0f, slowTimer_ - dt);
     if (slowTimer_ <= 0.0f) slowFraction_ = 0.0f;
     const float eliteSpeed = elite_ == EliteKind::Swift ? elites::kSwiftSpeed : 1.0f;
-    const float pace = speedJitter_ * eliteSpeed * (1.0f - slowFraction_);
+    const float pace = speedJitter_ * eliteSpeed * senses.haste * (1.0f - slowFraction_);
     model_->update(anim_, dt);
 
     if (state_ == State::Dying) {

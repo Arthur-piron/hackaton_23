@@ -11,14 +11,24 @@
 namespace {
 // Ambiance de nuit : assez sombre pour que les lumières comptent, assez claire
 // pour garder les silhouettes lisibles.
-constexpr Vector3 kAmbientSky = {0.10f, 0.12f, 0.22f};
-constexpr Vector3 kAmbientGround = {0.03f, 0.03f, 0.06f};
 constexpr Vector3 kMoonDirection = {0.35f, -1.0f, 0.45f};
-constexpr Vector3 kMoonColor = {0.10f, 0.13f, 0.25f};
-constexpr Vector3 kFogColor = {12.0f / 255.0f, 14.0f / 255.0f, 22.0f / 255.0f}; // fond de l'écran
-constexpr float kFogStart = 15.0f;
-constexpr float kFogEnd = 32.0f;
-constexpr Vector3 kMistColor = {0.16f, 0.19f, 0.27f};
+// Par ambiance : ciel, sol, lune, brouillard (= fond de l'écran), brume, début et fin du brouillard.
+constexpr Vector3 kNight[] = {{0.10f, 0.12f, 0.22f}, {0.03f, 0.03f, 0.06f}, {0.10f, 0.13f, 0.25f},
+                              {12.0f / 255.0f, 14.0f / 255.0f, 22.0f / 255.0f}, {0.16f, 0.19f, 0.27f}};
+constexpr Vector2 kNightFog = {15.0f, 32.0f};
+// Lune de sang : tout baigne dans le rouge.
+constexpr Vector3 kBloodMoon[] = {{0.30f, 0.06f, 0.06f}, {0.09f, 0.02f, 0.02f}, {0.42f, 0.07f, 0.05f},
+                                  {0.13f, 0.03f, 0.04f}, {0.34f, 0.07f, 0.07f}};
+constexpr Vector2 kBloodMoonFog = {15.0f, 32.0f};
+// Brouillard : on n'y voit plus à 8 m.
+constexpr Vector3 kFog[] = {{0.13f, 0.14f, 0.18f}, {0.05f, 0.05f, 0.07f}, {0.10f, 0.11f, 0.15f},
+                            {0.17f, 0.18f, 0.22f}, {0.30f, 0.32f, 0.38f}};
+constexpr Vector2 kFogFog = {3.0f, 9.5f};
+constexpr float kMoodBlendRate = 1.2f;  // taux du fondu exponentiel (≈ 2 s pour l'essentiel)
+// Coupure : les lampes électriques (peu de vacillement) grésillent puis s'éteignent.
+constexpr float kElectricFlickerMax = 0.2f;
+constexpr float kPowerFadeRate = 0.7f;  // par seconde
+constexpr float kSputterSpeed = 37.0f;
 
 // Lampe torche : faisceau blanc chaud, ~14 m de portée.
 constexpr Vector3 kFlashlightColor = {1.0f, 0.93f, 0.80f};
@@ -35,6 +45,20 @@ Vector3 toVector(Color color, float scale)
 {
     return {color.r / 255.0f * scale, color.g / 255.0f * scale, color.b / 255.0f * scale};
 }
+}
+
+Lighting::Atmosphere Lighting::atmosphereOf(Mood mood)
+{
+    const Vector3* colors = kNight;
+    Vector2 fog = kNightFog;
+    if (mood == Mood::BloodMoon) {
+        colors = kBloodMoon;
+        fog = kBloodMoonFog;
+    } else if (mood == Mood::Fog) {
+        colors = kFog;
+        fog = kFogFog;
+    }
+    return {colors[0], colors[1], colors[2], colors[3], colors[4], fog.x, fog.y};
 }
 
 Lighting::Lighting()
@@ -57,16 +81,11 @@ Lighting::Lighting()
     mistColorLoc_ = GetShaderLocation(shader_, "mistColor");
     timeLoc_ = GetShaderLocation(shader_, "time");
 
-    // Réglages fixes de la nuit : envoyés une fois pour toutes.
+    // La direction de la lune ne change pas ; les couleurs suivent l'ambiance (sendAtmosphere).
     const Vector3 moon = Vector3Normalize(kMoonDirection);
-    const Vector2 fogRange = {kFogStart, kFogEnd};
-    SetShaderValue(shader_, ambientSkyLoc_, &kAmbientSky, SHADER_UNIFORM_VEC3);
-    SetShaderValue(shader_, ambientGroundLoc_, &kAmbientGround, SHADER_UNIFORM_VEC3);
     SetShaderValue(shader_, moonDirectionLoc_, &moon, SHADER_UNIFORM_VEC3);
-    SetShaderValue(shader_, moonColorLoc_, &kMoonColor, SHADER_UNIFORM_VEC3);
-    SetShaderValue(shader_, fogColorLoc_, &kFogColor, SHADER_UNIFORM_VEC3);
-    SetShaderValue(shader_, fogRangeLoc_, &fogRange, SHADER_UNIFORM_VEC2);
-    SetShaderValue(shader_, mistColorLoc_, &kMistColor, SHADER_UNIFORM_VEC3);
+    atmosphere_ = atmosphereOf(Mood::Night);
+    sendAtmosphere(0.0f);
 
     // Halo : dégradé radial blanc -> transparent, mélangé en additif.
     Image glow = GenImageGradientRadial(kGlowTextureSize, kGlowTextureSize, 0.0f, WHITE, BLANK);
@@ -103,6 +122,49 @@ void Lighting::aimFlashlight(Vector3 position, Vector3 direction)
     if (Vector3Length(direction) > 1e-4f) flashlightDirection_ = Vector3Normalize(direction);
 }
 
+void Lighting::setMood(Mood mood)
+{
+    mood_ = mood;
+}
+
+Color Lighting::backgroundColor() const
+{
+    const Vector3& fog = atmosphere_.fogColor;
+    return {static_cast<unsigned char>(fog.x * 255.0f), static_cast<unsigned char>(fog.y * 255.0f),
+            static_cast<unsigned char>(fog.z * 255.0f), 255};
+}
+
+void Lighting::sendAtmosphere(float dt)
+{
+    // Fondu exponentiel vers l'ambiance voulue.
+    const Atmosphere target = atmosphereOf(mood_);
+    const float k = 1.0f - std::exp(-kMoodBlendRate * dt);
+    Atmosphere& a = atmosphere_;
+    a.ambientSky = Vector3Lerp(a.ambientSky, target.ambientSky, k);
+    a.ambientGround = Vector3Lerp(a.ambientGround, target.ambientGround, k);
+    a.moonColor = Vector3Lerp(a.moonColor, target.moonColor, k);
+    a.fogColor = Vector3Lerp(a.fogColor, target.fogColor, k);
+    a.mistColor = Vector3Lerp(a.mistColor, target.mistColor, k);
+    a.fogStart += (target.fogStart - a.fogStart) * k;
+    a.fogEnd += (target.fogEnd - a.fogEnd) * k;
+    const Vector2 fogRange = {a.fogStart, a.fogEnd};
+    SetShaderValue(shader_, ambientSkyLoc_, &a.ambientSky, SHADER_UNIFORM_VEC3);
+    SetShaderValue(shader_, ambientGroundLoc_, &a.ambientGround, SHADER_UNIFORM_VEC3);
+    SetShaderValue(shader_, moonColorLoc_, &a.moonColor, SHADER_UNIFORM_VEC3);
+    SetShaderValue(shader_, fogColorLoc_, &a.fogColor, SHADER_UNIFORM_VEC3);
+    SetShaderValue(shader_, fogRangeLoc_, &fogRange, SHADER_UNIFORM_VEC2);
+    SetShaderValue(shader_, mistColorLoc_, &a.mistColor, SHADER_UNIFORM_VEC3);
+}
+
+float Lighting::powerAt(const PointLight& light, int index) const
+{
+    if (light.flicker >= kElectricFlickerMax || power_ >= 1.0f) return 1.0f;
+    if (power_ <= 0.0f) return 0.0f;
+    // Pendant la transition, l'ampoule grésille : allumée, éteinte, à demi...
+    const float sputter = std::sin(time_ * kSputterSpeed + static_cast<float>(index) * 2.3f);
+    return power_ * (sputter > 0.0f ? 1.0f : 0.15f);
+}
+
 float Lighting::flickerAt(const PointLight& light, int index) const
 {
     if (light.flicker <= 0.0f) return light.intensity;
@@ -116,6 +178,8 @@ float Lighting::flickerAt(const PointLight& light, int index) const
 void Lighting::update(float dt, Vector3 focus)
 {
     time_ += dt;
+    power_ = std::clamp(power_ + (powerCut_ ? -kPowerFadeRate : kPowerFadeRate) * dt, 0.0f, 1.0f);
+    sendAtmosphere(dt);
     for (Flash& f : flashes_) {
         f.left -= dt;
         if (f.left <= 0.0f) continue;
@@ -128,14 +192,16 @@ void Lighting::update(float dt, Vector3 focus)
 
     // Lumières assez proches pour toucher l'écran, les plus proches d'abord.
     active_.clear();
-    const auto consider = [&](const PointLight& light, int index) {
+    const auto consider = [&](const PointLight& light, int index, float power) {
         const float dx = light.position.x - focus.x;
         const float dz = light.position.z - focus.z;
-        if (std::sqrt(dx * dx + dz * dz) - light.range > kCullDistance) return;
-        active_.push_back({light, flickerAt(light, index)});
+        if (power <= 0.0f || std::sqrt(dx * dx + dz * dz) - light.range > kCullDistance) return;
+        active_.push_back({light, flickerAt(light, index) * power});
     };
-    for (size_t i = 0; i < static_.size(); ++i) consider(static_[i], static_cast<int>(i));
-    for (size_t i = 0; i < dynamic_.size(); ++i) consider(dynamic_[i], static_cast<int>(static_.size() + i));
+    for (size_t i = 0; i < static_.size(); ++i) {
+        consider(static_[i], static_cast<int>(i), powerAt(static_[i], static_cast<int>(i)));
+    }
+    for (size_t i = 0; i < dynamic_.size(); ++i) consider(dynamic_[i], static_cast<int>(static_.size() + i), 1.0f);
     dynamic_.clear();
     const auto distanceSq = [&](const ActiveLight& a) {
         return Vector3DistanceSqr(a.light.position, focus);

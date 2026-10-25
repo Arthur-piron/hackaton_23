@@ -104,6 +104,8 @@ void WaveManager::reset()
     enemies_.clear();
     phase_ = Phase::Intermission;
     wave_ = 0;
+    event_ = WaveEvent::None;
+    lastEvent_ = WaveEvent::None;
     timer_ = kFirstIntermission;
     toSpawn_ = 0;
     spawnTimer_ = 0.0f;
@@ -142,7 +144,10 @@ void WaveManager::startWave(EventQueue& events)
 {
     ++wave_;
     phase_ = Phase::Fighting;
+    event_ = rollWaveEvent(wave_, lastEvent_);
+    if (event_ != WaveEvent::None) lastEvent_ = event_;
     toSpawn_ = waveQuota(wave_);
+    if (event_ == WaveEvent::Horde) toSpawn_ *= waveEvents::kHordeQuotaMultiplier;
     spawnTimer_ = 0.0f;
     events.push_back({EventType::WaveStarted, {0.0f, 0.0f, 0.0f}, static_cast<float>(wave_)});
 }
@@ -188,6 +193,8 @@ Vector3 WaveManager::lightEscape(Vector3 position) const
         escape = Vector3Add(Vector3Normalize(aside), Vector3Scale(flashlightDirection_, 0.3f));
     }
     // Hors des flaques de lumière du décor, d'autant plus fort qu'il est près de la source.
+    // Pendant une coupure, les lampadaires sont éteints : plus rien à fuir.
+    if (event_ == WaveEvent::Blackout) return escape;
     for (const PointLight& light : lights_) {
         const float radius = light.range * kLightAvoidFraction;
         const Vector3 away = {position.x - light.position.x, 0.0f, position.z - light.position.z};
@@ -213,11 +220,24 @@ EnemySenses WaveManager::sense(const Enemy& enemy, Vector3 playerPosition, Vecto
     senses.playerForward = playerForward;
     senses.inFlashlight = false;
     senses.lightEscape = {0.0f, 0.0f, 0.0f};
+    senses.haste = waveEventInfo(event_).haste;
     if (enemy.stats().fearsLight && enemy.isAlive()) {
         senses.inFlashlight = inFlashlight(enemy.position());
         senses.lightEscape = lightEscape(enemy.position());
     }
     return senses;
+}
+
+void WaveManager::spawnEnemy(Vector3 playerPosition, const World& world, const Zones& zones)
+{
+    // Horde : surtout des marcheurs affaiblis.
+    const bool hordeWalker = event_ == WaveEvent::Horde && roll(100) <= waveEvents::kHordeWalkerPercent;
+    const EnemyType type = hordeWalker ? EnemyType::Walker : pickType();
+    enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
+                          pickSpawnPoint(playerPosition, world, zones));
+    Enemy& enemy = enemies_.back();
+    enemy.scaleHealth(hordeWalker ? healthMultiplier_ * waveEvents::kHordeWalkerHealth : healthMultiplier_);
+    enemy.makeElite(rollElite(wave_, eliteChance_));
 }
 
 Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition, const World& world, const Zones& zones) const
@@ -302,11 +322,8 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
         for (const Enemy& e : enemies_) alive += e.isAlive() ? 1 : 0;
         if (spawnTimer_ <= 0.0f && alive < maxAlive(wave_)) {
             spawnTimer_ = spawnInterval(wave_);
-            const EnemyType type = pickType();
-            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
-                                  pickSpawnPoint(playerPosition, world, zones));
-            enemies_.back().scaleHealth(healthMultiplier_);
-            enemies_.back().makeElite(rollElite(wave_, eliteChance_));
+            if (event_ == WaveEvent::Horde) spawnTimer_ *= waveEvents::kHordeSpawnInterval;
+            spawnEnemy(playerPosition, world, zones);
             --toSpawn_;
         }
     }
@@ -322,6 +339,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
     if (phase_ == Phase::Fighting && remaining() == 0) {
         events.push_back({EventType::WaveCleared, playerPosition, static_cast<float>(wave_)});
         phase_ = Phase::Intermission;
+        event_ = WaveEvent::None;
         timer_ = kIntermission;
         if (!endless_ && wave_ >= kFinalWave) cleared_ = true;
     }

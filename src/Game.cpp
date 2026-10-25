@@ -562,6 +562,12 @@ void Game::updateLighting(float dt)
     for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
     for (const PointLight& electric : generator_.lights(*structures_)) lighting_->addLight(electric);
     for (const PointLight& elite : waves_->eliteLights()) lighting_->addLight(elite);
+    // Événement de vague : ciel rouge, brouillard, coupure de courant.
+    const WaveEvent event = waves_->event();
+    lighting_->setMood(event == WaveEvent::BloodMoon ? Lighting::Mood::BloodMoon
+                       : event == WaveEvent::Fog     ? Lighting::Mood::Fog
+                                                     : Lighting::Mood::Night);
+    lighting_->setPowerCut(event == WaveEvent::Blackout);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -1105,6 +1111,7 @@ void Game::rewardKill(const Enemy& enemy, bool byDefense)
     const int multiplierBefore = economy_.comboMultiplier();
     Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
     if (byDefense) ++defenseKills_;
+    reward.gold *= waves_->goldMultiplier();
     if (enemy.isElite()) {
         reward.gold *= elites::kRewardMultiplier;
         reward.xp *= elites::kRewardMultiplier;
@@ -1208,7 +1215,13 @@ void Game::handleEvents()
             break;
         case EventType::WaveStarted:
             audio_.play("wave_bell", 0.8f, 0.0f);
-            hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
+            if (waves_->event() == WaveEvent::None) {
+                hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
+            } else {
+                const WaveEventInfo& info = waveEventInfo(waves_->event());
+                hud_.announce(info.title, TextFormat("Vague %d : %s", static_cast<int>(ev.value), info.description),
+                              info.color);
+            }
             lastStandReady_ = true;
             if (altar_) altar_->recharge();
             buildMode_.reset();
@@ -1441,7 +1454,7 @@ void Game::draw() const
         creditsScreen_.draw();
     } else {
         postFx_->begin();
-        ClearBackground(kBackgroundColor);
+        ClearBackground(lighting_->backgroundColor());
         drawWorld();
         postFx_->end();
         postFx_->draw();

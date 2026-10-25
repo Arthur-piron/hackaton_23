@@ -4,6 +4,7 @@
 #include "fx/PointLight.hpp"
 #include "game/Enemy.hpp"
 #include "game/Events.hpp"
+#include "game/WaveEvent.hpp"
 
 #include <array>
 #include <cstddef>
@@ -54,6 +55,9 @@ public:
     std::vector<Enemy>& enemies() { return enemies_; }
     const std::vector<Enemy>& enemies() const { return enemies_; }
     int wave() const { return wave_; }
+    // Événement de la vague en cours (None pendant les pauses).
+    WaveEvent event() const { return event_; }
+    int goldMultiplier() const { return waveEventInfo(event_).goldMultiplier; }
     Phase phase() const { return phase_; }
     float intermissionLeft() const { return phase_ == Phase::Intermission ? timer_ : 0.0f; }
     int remaining() const;
@@ -62,6 +66,7 @@ public:
 private:
     void startWave(EventQueue& events);
     EnemyType pickType() const;
+    void spawnEnemy(Vector3 playerPosition, const World& world, const Zones& zones);
     EnemySenses sense(const Enemy& enemy, Vector3 playerPosition, Vector3 playerForward, const Zones& zones) const;
     bool inFlashlight(Vector3 position) const;
     Vector3 lightEscape(Vector3 position) const;
@@ -81,6 +86,8 @@ private:
     Vector3 flashlightDirection_ = {0.0f, 0.0f, 1.0f};
     Phase phase_ = Phase::Intermission;
     int wave_ = 0;
+    WaveEvent event_ = WaveEvent::None;
+    WaveEvent lastEvent_ = WaveEvent::None;
     float timer_ = 0.0f;
     int toSpawn_ = 0;
     float spawnTimer_ = 0.0f;

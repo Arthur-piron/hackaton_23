@@ -34,6 +34,7 @@ struct EnemySenses {
     Vector3 playerForward;   // vers où le joueur regarde et éclaire
     Vector3 lightEscape;     // direction pour sortir de la lumière (nulle dans le noir)
     bool inFlashlight;       // pris dans le cône de la lampe torche
+    float haste;             // multiplicateur de vitesse de la vague (Lune de sang)
 };
 
 // Un mort-vivant : poursuit le joueur, attaque au contact, meurt en animation.
