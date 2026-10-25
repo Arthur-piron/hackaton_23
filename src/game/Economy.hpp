@@ -4,6 +4,7 @@
 #include "game/Events.hpp"
 
 #include <array>
+#include <cstddef>
 
 // Ressources de construction (docs/GAME.md §7.1) : bois, ferraille, bidons de carburant.
 enum class Resource { Wood, Scrap, Fuel, Count };

@@ -4,6 +4,7 @@
 #include "game/Events.hpp"
 #include "raylib.h"
 
+#include <cstddef>
 #include <utility>
 #include <vector>
 
