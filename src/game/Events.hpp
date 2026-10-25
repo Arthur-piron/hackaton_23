@@ -48,6 +48,8 @@ enum class EventType {
     GeneratorRefueled,  // value = bidons dans le réservoir
     GeneratorEmpty,     // un générateur tombe à sec
     StructureUpgraded,  // value = nouveau niveau
+    BossSpawned,        // value = EnemyType du boss
+    TombstoneImpact,    // pierre tombale du Fossoyeur qui s'écrase ; value = rayon
 };
 
 // Nature d'un coup porté (EnemyHit) : change la couleur du chiffre de dégâts et le son.

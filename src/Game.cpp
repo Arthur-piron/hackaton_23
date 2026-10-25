@@ -61,6 +61,10 @@ constexpr int kFortuneComboMultiplier = 5;
 constexpr int kFortuneCoins = 50;
 constexpr int kFortuneGoldPerCoin = 5;
 constexpr float kExplosionShake = 0.35f;
+// Boss : annonce et pierres tombales du Fossoyeur.
+constexpr Color kBossColor = {230, 60, 45, 255};
+constexpr Color kTombstoneDebrisColor = {150, 150, 160, 255};
+constexpr int kTombstoneDebrisChunks = 16;
 constexpr float kFrostSlow = 0.3f;
 constexpr float kFrostDuration = 1.5f;
 
@@ -369,7 +373,7 @@ void Game::startNewGame()
     arsenal_.reset();
     if (progression_->startsWithShotgun()) arsenal_.unlock(kArmoryWeapon);
     waves_->reset();
-    waves_->setRules(gameModeRules(mode_).endless, gameModeRules(mode_).enemyHealth);
+    waves_->setRules(gameModeRules(mode_).endless, gameModeRules(mode_).enemyHealth, gameModeRules(mode_).eliteChance);
     projectiles_.clear();
     economy_.reset();
     economy_.addGold(progression_->startGold());
@@ -561,6 +565,13 @@ void Game::updateLighting(float dt)
     if (altar_) lighting_->addLight(altar_->light());
     for (const PointLight& fire : traps_.lights(*structures_)) lighting_->addLight(fire);
     for (const PointLight& electric : generator_.lights(*structures_)) lighting_->addLight(electric);
+    for (const PointLight& elite : waves_->eliteLights()) lighting_->addLight(elite);
+    // Événement de vague : ciel rouge, brouillard, coupure de courant.
+    const WaveEvent event = waves_->event();
+    lighting_->setMood(event == WaveEvent::BloodMoon ? Lighting::Mood::BloodMoon
+                       : event == WaveEvent::Fog     ? Lighting::Mood::Fog
+                                                     : Lighting::Mood::Night);
+    lighting_->setPowerCut(event == WaveEvent::Blackout);
     lighting_->update(dt, cameraRig_.camera().target);
 }
 
@@ -634,6 +645,12 @@ void Game::updatePlaying(float dt)
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
+    // Pierres tombales du Fossoyeur : dégâts à la structure dans la zone d'impact (indices : damage publie).
+    for (size_t i = 0, count = events_.size(); i < count; ++i) {
+        if (events_[i].type != EventType::TombstoneImpact) continue;
+        const int id = structures_->blockingNear(events_[i].position, events_[i].value);
+        if (id >= 0) structures_->damage(id, boss::kTombstoneStructureDamage, events_);
+    }
     resolveProjectiles();
     for (const Flashlight::LightTick& tick :
          flashlight_.illuminate(dt, player_->position(), player_->forward(), waves_->enemies(), *world_)) {
@@ -674,7 +691,7 @@ void Game::updatePlaying(float dt)
     const int aliveEnemies = static_cast<int>(std::count_if(waves_->enemies().begin(), waves_->enemies().end(),
                                                               [](const Enemy& e) { return e.isAlive(); }));
     musicDirector_.update(dt, audio_, aliveEnemies, waves_->phase() == WaveManager::Phase::Intermission,
-                          waves_->wave(), 0);
+                          waves_->wave(), waves_->bossActive() ? waves_->wave() : 0);
     updateFootsteps(dt);
     handleEvents();
 
@@ -1093,7 +1110,8 @@ void Game::endRun(bool victory)
 {
     // Une vague est « survécue » quand elle est terminée : celle en cours ne compte pas.
     const int survived = victory ? waves_->wave() : waves_->wave() - 1;
-    bonesEarned_ = progression_->finishRun(mode_, survived, score_, victory);
+    // Les ossements des élites sont déjà comptés dans bonesEarned_.
+    bonesEarned_ += progression_->finishRun(mode_, survived, score_, victory);
     state_ = victory ? State::Victory : State::GameOver;
 }
 
@@ -1101,8 +1119,14 @@ void Game::rewardKill(const Enemy& enemy, bool byDefense)
 {
     const CardModifiers& m = cards_.modifiers();
     const int multiplierBefore = economy_.comboMultiplier();
-    const Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
+    Economy::Reward reward = byDefense ? economy_.addDefenseKill(enemy.type()) : economy_.addKill(enemy.type());
     if (byDefense) ++defenseKills_;
+    reward.gold *= waves_->goldMultiplier();
+    if (enemy.isElite()) {
+        reward.gold *= elites::kRewardMultiplier;
+        reward.xp *= elites::kRewardMultiplier;
+        rewardElite(enemy);
+    }
     pickups_.spawnLoot(enemy.hitCenter(), reward.gold, reward.xp);
     if (chance(Flashlight::batteryDropChance(enemy.type()))) pickups_.spawnBattery(enemy.hitCenter());
     const Economy::Salvage salvage = Economy::rollSalvage(enemy.type());
@@ -1117,6 +1141,17 @@ void Game::rewardKill(const Enemy& enemy, bool byDefense)
     if (m.deadMansFortune && multiplierBefore < kFortuneComboMultiplier &&
         economy_.comboMultiplier() >= kFortuneComboMultiplier) {
         pickups_.spawnCoinRain(player_->position(), kFortuneCoins, kFortuneGoldPerCoin);
+    }
+}
+
+void Game::rewardElite(const Enemy& enemy)
+{
+    const int bones = GetRandomValue(elites::kMinBones, elites::kMaxBones);
+    progression_->addBones(bones);
+    bonesEarned_ += bones;
+    if (enemy.elite() == EliteKind::Explosive) {
+        explode(enemy.position(), elites::kExplosionRadius, elites::kExplosionDamage, elites::kExplosionKnockback,
+                elites::kExplosionDamage, eliteInfo(EliteKind::Explosive).color);
     }
 }
 
@@ -1190,7 +1225,13 @@ void Game::handleEvents()
             break;
         case EventType::WaveStarted:
             audio_.play("wave_bell", 0.8f, 0.0f);
-            hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
+            if (waves_->event() == WaveEvent::None) {
+                hud_.announce(TextFormat("VAGUE %d", static_cast<int>(ev.value)), "Ils arrivent...", kWaveColor);
+            } else {
+                const WaveEventInfo& info = waveEventInfo(waves_->event());
+                hud_.announce(info.title, TextFormat("Vague %d : %s", static_cast<int>(ev.value), info.description),
+                              info.color);
+            }
             lastStandReady_ = true;
             if (altar_) altar_->recharge();
             buildMode_.reset();
@@ -1234,6 +1275,17 @@ void Game::handleEvents()
             lighting_->flash({Vector3Add(ev.position, {0.0f, kExplosionLightHeight, 0.0f}), kExplosionLightColor,
                               ev.value * 2.0f, kExplosionLightIntensity, 0.0f, 0.0f},
                              kExplosionLightDuration);
+            break;
+        case EventType::BossSpawned:
+            audio_.play("wave_bell", 1.0f, 0.0f);
+            cameraRig_.shake(kDeathShake);
+            hud_.announce(enemyStats(static_cast<EnemyType>(static_cast<int>(ev.value))).name,
+                          "Il vient creuser vos tombes...", kBossColor);
+            break;
+        case EventType::TombstoneImpact:
+            particles_->debris(ev.position, kTombstoneDebrisColor, kTombstoneDebrisChunks);
+            audio_.playAt("hit_heavy", ev.position, 1.0f, 0.15f);
+            cameraRig_.shake(kExplosionShake);
             break;
         case EventType::LastStand:
             audio_.play("wave_bell", 0.9f, 0.0f);
@@ -1423,7 +1475,7 @@ void Game::draw() const
         creditsScreen_.draw();
     } else {
         postFx_->begin();
-        ClearBackground(kBackgroundColor);
+        ClearBackground(lighting_->backgroundColor());
         drawWorld();
         postFx_->end();
         postFx_->draw();
@@ -1437,6 +1489,8 @@ void Game::draw() const
                                    player_->health() < player_->maxHealth(), *zones_);
             }
         }
+        waves_->drawEliteNames(cameraRig_.camera(), player_->position());
+        waves_->drawBossBar();
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Playing) {
             structures_->drawHealthBars(cameraRig_.camera(), player_->position());

@@ -96,6 +96,8 @@ private:
     // Fait progresser le combo, lâche l'or et l'XP d'un ennemi qui vient de mourir
     // et déclenche les cartes liées aux morts (crochet onKill).
     void rewardKill(const Enemy& enemy, bool byDefense = false);
+    // Élite tuée : ossements, et souffle de l'explosif.
+    void rewardElite(const Enemy& enemy);
     // Dégâts reçus par le joueur (crochet onDamaged : Dernier rempart).
     void hurtPlayer(float damage, Vector3 from);
     // Brûlures, explosions nécrotiques en attente, Soleil de poche.

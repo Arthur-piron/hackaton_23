@@ -38,6 +38,8 @@ constexpr float kGhostFadeDuration = 1.5f;
 // Ralentissement (carte Gel...) : teinte bleu glacé.
 constexpr Color kFrostTint = {150, 205, 255, 255};
 constexpr float kFrostTintStrength = 0.6f;
+// Élite : la teinte du corps tire légèrement vers la couleur du modificateur.
+constexpr float kEliteTintStrength = 0.3f;
 
 const EnemyStats kStats[] = {
     // nom, modèle, vie, vitesse, dégâts, portée, recharge, échelle, teinte, anim, vitesse anim, score, résistance,
@@ -54,6 +56,8 @@ const EnemyStats kStats[] = {
      0.3f, true, false},
     {"Spectre", "character-ghost.glb", 70.0f, 2.3f, 14.0f, 1.3f, 1.4f, 1.05f, {190, 225, 255, kGhostAlpha}, "idle", 2.3f,
      25, 0.6f, false, true},
+    {"Le Fossoyeur", "character-zombie.glb", 2200.0f, 1.3f, 40.0f, 1.4f, 2.2f, 2.2f, {125, 110, 95, 255}, "walk", 1.0f,
+     500, 1.0f, false, false},
 };
 static_assert(sizeof(kStats) / sizeof(kStats[0]) == static_cast<size_t>(EnemyType::Count), "un profil par type d'ennemi");
 
@@ -89,6 +93,7 @@ Enemy::Enemy(unsigned id, EnemyType type, const AnimatedModel& model, Vector3 po
     , model_(&model)
     , position_(position)
     , health_(enemyStats(type).health)
+    , maxHealth_(enemyStats(type).health)
     , groanTimer_(randomRange(1.0f, 8.0f))
     , speedJitter_(randomRange(0.85f, 1.15f))
     , clipMove_(model.findClip(enemyStats(type).moveClip))
@@ -114,6 +119,19 @@ float Enemy::hoverHeight() const
     // À sa mort, le spectre retombe en se dissipant.
     if (state_ == State::Dying) return hover * std::max(0.0f, 1.0f - deathTimer_ / kGhostFadeDuration);
     return hover;
+}
+
+void Enemy::scaleHealth(float factor)
+{
+    health_ *= factor;
+    maxHealth_ *= factor;
+}
+
+void Enemy::makeElite(EliteKind kind)
+{
+    if (kind == EliteKind::None || elite_ != EliteKind::None) return;
+    elite_ = kind;
+    scaleHealth(elites::kHealthMultiplier);
 }
 
 float Enemy::radius() const
@@ -146,7 +164,8 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
     age_ += dt;
     slowTimer_ = std::max(0.0f, slowTimer_ - dt);
     if (slowTimer_ <= 0.0f) slowFraction_ = 0.0f;
-    const float pace = speedJitter_ * (1.0f - slowFraction_);
+    const float eliteSpeed = elite_ == EliteKind::Swift ? elites::kSwiftSpeed : 1.0f;
+    const float pace = speedJitter_ * eliteSpeed * senses.haste * (1.0f - slowFraction_);
     model_->update(anim_, dt);
 
     if (state_ == State::Dying) {
@@ -156,6 +175,11 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
             if (deathTimer_ > kCorpseDuration + kSinkDuration) removable_ = true;
         }
         return 0.0f;
+    }
+
+    sinceHit_ += dt;
+    if (elite_ == EliteKind::Regenerating && sinceHit_ >= elites::kRegenDelay) {
+        health_ = std::min(maxHealth_, health_ + maxHealth_ * elites::kRegenFraction * dt);
     }
 
     // Recul dû aux balles, amorti dans le temps.
@@ -197,6 +221,14 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
     float damage = 0.0f;
     const float reach = s.attackRange * s.scale;
 
+    if (state_ == State::Gesturing) {
+        if (model_->isFinished(anim_)) {
+            state_ = State::Chasing;
+            model_->play(anim_, clipMove_, true, pace);
+        }
+        return 0.0f;
+    }
+
     if (state_ == State::Attacking) {
         const float duration = model_->clipDuration(clipAttack_);
         if (!attackDealt_ && anim_.time >= duration * kAttackImpactFraction) {
@@ -237,18 +269,34 @@ bool Enemy::hit(float damage, Vector3 direction, float knockback, EventQueue& ev
 {
     if (state_ == State::Dying) return false;
     const EnemyStats& s = stats();
+    const Vector3 flat = Vector3Normalize({direction.x, 0.0f, direction.z});
+    // Blindé : un coup qui arrive face à lui (sens opposé à son regard) est à moitié arrêté.
+    const Vector3 facing = {std::sin(yaw_), 0.0f, std::cos(yaw_)};
+    const bool deflected = elite_ == EliteKind::Armored && Vector3DotProduct(flat, facing) < 0.0f;
+    if (deflected) damage *= elites::kArmorFrontFactor;
     health_ -= damage;
     flash_ = kFlashDuration;
-    const Vector3 flat = Vector3Normalize({direction.x, 0.0f, direction.z});
+    sinceHit_ = 0.0f;
     knockback_ = Vector3Add(knockback_, Vector3Scale(flat, knockback * (1.0f - s.knockbackResistance)));
+    // EnemyHit doit rester le premier événement publié (Game::damageEnemy y précise la nature du coup).
     events.push_back({EventType::EnemyHit, hitCenter(), damage, flat});
+    if (deflected) events.push_back({EventType::BulletImpact, hitCenter(), 0.0f, flat});
 
     if (health_ > 0.0f) return false;
     state_ = State::Dying;
     deathTimer_ = 0.0f;
     model_->play(anim_, clipDie_, false, 1.0f, true);
-    events.push_back({EventType::EnemyKilled, hitCenter(), static_cast<float>(s.score), flat});
+    const int score = isElite() ? s.score * elites::kRewardMultiplier : s.score;
+    events.push_back({EventType::EnemyKilled, hitCenter(), static_cast<float>(score), flat});
     return true;
+}
+
+void Enemy::gesture(const char* clip, float speed)
+{
+    const int index = model_->findClip(clip);
+    if (state_ == State::Dying || index < 0) return;
+    state_ = State::Gesturing;
+    model_->play(anim_, index, false, speed, true);
 }
 
 void Enemy::slow(float fraction, float duration)
@@ -288,6 +336,12 @@ float Enemy::eyeGlow() const
 void Enemy::draw() const
 {
     Color tint = stats().tint;
+    if (isElite()) {
+        const Color elite = eliteInfo(elite_).color;
+        tint.r = lerpChannel(tint.r, elite.r, kEliteTintStrength);
+        tint.g = lerpChannel(tint.g, elite.g, kEliteTintStrength);
+        tint.b = lerpChannel(tint.b, elite.b, kEliteTintStrength);
+    }
     if (slowTimer_ > 0.0f) {
         const float k = kFrostTintStrength;
         tint.r = lerpChannel(tint.r, kFrostTint.r, k);

@@ -1,6 +1,7 @@
 #include "game/WaveManager.hpp"
 
 #include "core/AssetPath.hpp"
+#include "core/Fonts.hpp"
 #include "game/FlowField.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
@@ -27,6 +28,18 @@ constexpr float kFlashlightRange = 14.0f;
 constexpr float kFlashlightHalfAngle = 27.0f * DEG2RAD;
 // Les vampires évitent le cœur des lumières du décor (fraction de leur portée).
 constexpr float kLightAvoidFraction = 0.7f;
+// Le boss d'une vague arrive quelques secondes après l'annonce de la vague.
+constexpr float kBossSpawnDelay = 4.0f;
+// Élites : anneau pulsant au sol, lueur colorée et nom au-dessus de la tête.
+constexpr float kEliteRingRadius = 0.75f;
+constexpr float kEliteRingHeight = 0.03f;
+constexpr float kElitePulseSpeed = 4.0f;
+constexpr float kEliteLightHeight = 1.2f;
+constexpr float kEliteLightRange = 3.5f;
+constexpr float kEliteLightIntensity = 1.4f;
+constexpr float kEliteNameHeight = 2.3f;     // au-dessus des pieds, × l'échelle du mort
+constexpr float kEliteNameDistance = 14.0f;  // au-delà, le nom n'est pas affiché
+constexpr int kEliteNameSize = 16;
 
 // Probabilité d'apparition (en %) d'un type : base + parVague × vague, à partir de premièreVague.
 // Le reste des tirages donne des marcheurs.
@@ -82,6 +95,7 @@ WaveManager::~WaveManager() = default;
 
 void WaveManager::setShader(const Shader& shader)
 {
+    bosses_.setShader(shader);
     for (const std::shared_ptr<AnimatedModel>& model : models_) {
         Model& m = model->model();
         for (int i = 0; i < m.materialCount; ++i) m.materials[i].shader = shader;
@@ -91,8 +105,12 @@ void WaveManager::setShader(const Shader& shader)
 void WaveManager::reset()
 {
     enemies_.clear();
+    bosses_.reset();
+    bossDelay_ = -1.0f;
     phase_ = Phase::Intermission;
     wave_ = 0;
+    event_ = WaveEvent::None;
+    lastEvent_ = WaveEvent::None;
     timer_ = kFirstIntermission;
     toSpawn_ = 0;
     spawnTimer_ = 0.0f;
@@ -103,7 +121,15 @@ int WaveManager::remaining() const
 {
     int alive = 0;
     for (const Enemy& e : enemies_) alive += e.isAlive() ? 1 : 0;
-    return alive + toSpawn_;
+    return alive + toSpawn_ + (bossDelay_ >= 0.0f ? 1 : 0);
+}
+
+bool WaveManager::bossActive() const
+{
+    for (const Enemy& e : enemies_) {
+        if (e.isBoss() && e.isAlive()) return true;
+    }
+    return false;
 }
 
 void WaveManager::skipIntermission()
@@ -120,18 +146,23 @@ void WaveManager::spawnRing(Vector3 center, float radius, int count, EnemyType t
     }
 }
 
-void WaveManager::setRules(bool endless, float healthMultiplier)
+void WaveManager::setRules(bool endless, float healthMultiplier, float eliteChance)
 {
     endless_ = endless;
     healthMultiplier_ = healthMultiplier;
+    eliteChance_ = eliteChance;
 }
 
 void WaveManager::startWave(EventQueue& events)
 {
     ++wave_;
     phase_ = Phase::Fighting;
+    event_ = rollWaveEvent(wave_, lastEvent_);
+    if (event_ != WaveEvent::None) lastEvent_ = event_;
     toSpawn_ = waveQuota(wave_);
+    if (event_ == WaveEvent::Horde) toSpawn_ *= waveEvents::kHordeQuotaMultiplier;
     spawnTimer_ = 0.0f;
+    bossDelay_ = wave_ % boss::kBossCycle == boss::kGravediggerWave ? kBossSpawnDelay : -1.0f;
     events.push_back({EventType::WaveStarted, {0.0f, 0.0f, 0.0f}, static_cast<float>(wave_)});
 }
 
@@ -176,6 +207,8 @@ Vector3 WaveManager::lightEscape(Vector3 position) const
         escape = Vector3Add(Vector3Normalize(aside), Vector3Scale(flashlightDirection_, 0.3f));
     }
     // Hors des flaques de lumière du décor, d'autant plus fort qu'il est près de la source.
+    // Pendant une coupure, les lampadaires sont éteints : plus rien à fuir.
+    if (event_ == WaveEvent::Blackout) return escape;
     for (const PointLight& light : lights_) {
         const float radius = light.range * kLightAvoidFraction;
         const Vector3 away = {position.x - light.position.x, 0.0f, position.z - light.position.z};
@@ -201,11 +234,24 @@ EnemySenses WaveManager::sense(const Enemy& enemy, Vector3 playerPosition, Vecto
     senses.playerForward = playerForward;
     senses.inFlashlight = false;
     senses.lightEscape = {0.0f, 0.0f, 0.0f};
+    senses.haste = waveEventInfo(event_).haste;
     if (enemy.stats().fearsLight && enemy.isAlive()) {
         senses.inFlashlight = inFlashlight(enemy.position());
         senses.lightEscape = lightEscape(enemy.position());
     }
     return senses;
+}
+
+void WaveManager::spawnEnemy(Vector3 playerPosition, const World& world, const Zones& zones)
+{
+    // Horde : surtout des marcheurs affaiblis.
+    const bool hordeWalker = event_ == WaveEvent::Horde && roll(100) <= waveEvents::kHordeWalkerPercent;
+    const EnemyType type = hordeWalker ? EnemyType::Walker : pickType();
+    enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
+                          pickSpawnPoint(playerPosition, world, zones));
+    Enemy& enemy = enemies_.back();
+    enemy.scaleHealth(hordeWalker ? healthMultiplier_ * waveEvents::kHordeWalkerHealth : healthMultiplier_);
+    enemy.makeElite(rollElite(wave_, eliteChance_));
 }
 
 Vector3 WaveManager::pickSpawnPoint(Vector3 playerPosition, const World& world, const Zones& zones) const
@@ -278,6 +324,7 @@ void WaveManager::separate(float dt)
 float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForward, const World& world,
                           const Zones& zones, EventQueue& events)
 {
+    time_ += dt;
     if (phase_ == Phase::Intermission && !cleared_) {
         timer_ -= dt;
         if (timer_ <= 0.0f) startWave(events);
@@ -289,15 +336,24 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
         for (const Enemy& e : enemies_) alive += e.isAlive() ? 1 : 0;
         if (spawnTimer_ <= 0.0f && alive < maxAlive(wave_)) {
             spawnTimer_ = spawnInterval(wave_);
-            const EnemyType type = pickType();
-            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
-                                  pickSpawnPoint(playerPosition, world, zones));
-            enemies_.back().scaleHealth(healthMultiplier_);
+            if (event_ == WaveEvent::Horde) spawnTimer_ *= waveEvents::kHordeSpawnInterval;
+            spawnEnemy(playerPosition, world, zones);
             --toSpawn_;
         }
     }
 
-    float damage = 0.0f;
+    if (bossDelay_ >= 0.0f) {
+        bossDelay_ -= dt;
+        if (bossDelay_ < 0.0f) {
+            const EnemyType type = EnemyType::Gravedigger;
+            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
+                                  pickSpawnPoint(playerPosition, world, zones));
+            enemies_.back().scaleHealth(healthMultiplier_);
+            events.push_back({EventType::BossSpawned, enemies_.back().position(), static_cast<float>(type)});
+        }
+    }
+
+    float damage = bosses_.update(dt, enemies_, playerPosition, events);
     // Chaque mort marche vers le joueur, ou vers la grille qui mène à sa zone.
     for (Enemy& e : enemies_) damage += e.update(dt, sense(e, playerPosition, playerForward, zones), events);
     separate(dt);
@@ -308,6 +364,7 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
     if (phase_ == Phase::Fighting && remaining() == 0) {
         events.push_back({EventType::WaveCleared, playerPosition, static_cast<float>(wave_)});
         phase_ = Phase::Intermission;
+        event_ = WaveEvent::None;
         timer_ = kIntermission;
         if (!endless_ && wave_ >= kFinalWave) cleared_ = true;
     }
@@ -320,7 +377,47 @@ void WaveManager::draw() const
     for (const Enemy& e : enemies_) {
         if (!e.stats().ethereal) e.draw();
     }
+    bosses_.draw();
+    const float pulse = 0.5f + 0.5f * std::sin(time_ * kElitePulseSpeed);
+    for (const Enemy& e : enemies_) {
+        if (!e.isElite() || !e.isAlive()) continue;
+        const Color color = eliteInfo(e.elite()).color;
+        const Vector3 ground = {e.position().x, kEliteRingHeight, e.position().z};
+        const float radius = kEliteRingRadius * e.stats().scale;
+        DrawCylinder(ground, radius, radius, 0.0f, 24, ColorAlpha(color, 0.12f + 0.12f * pulse));
+        DrawCircle3D(ground, radius * (1.0f + 0.1f * pulse), {1.0f, 0.0f, 0.0f}, 90.0f, ColorAlpha(color, 0.9f));
+    }
     for (const Enemy& e : enemies_) {
         if (e.stats().ethereal) e.draw();
+    }
+}
+
+std::vector<PointLight> WaveManager::eliteLights() const
+{
+    std::vector<PointLight> lights;
+    for (const Enemy& e : enemies_) {
+        if (!e.isElite() || !e.isAlive()) continue;
+        PointLight light;
+        light.position = Vector3Add(e.position(), {0.0f, kEliteLightHeight, 0.0f});
+        light.color = eliteInfo(e.elite()).color;
+        light.range = kEliteLightRange * e.stats().scale;
+        light.intensity = kEliteLightIntensity;
+        lights.push_back(light);
+    }
+    return lights;
+}
+
+void WaveManager::drawEliteNames(const Camera3D& camera, Vector3 playerPosition) const
+{
+    for (const Enemy& e : enemies_) {
+        if (!e.isElite() || !e.isAlive()) continue;
+        if (Vector3Distance(e.position(), playerPosition) > kEliteNameDistance) continue;
+        const Vector3 above = Vector3Add(e.position(), {0.0f, kEliteNameHeight * e.stats().scale, 0.0f});
+        const Vector2 screen = GetWorldToScreen(above, camera);
+        const std::string name = eliteName(e.type(), e.elite());
+        const int x = static_cast<int>(screen.x) - fonts::measureText(name.c_str(), kEliteNameSize) / 2;
+        const int y = static_cast<int>(screen.y);
+        fonts::drawText(name.c_str(), x + 1, y + 1, kEliteNameSize, {0, 0, 0, 200});
+        fonts::drawText(name.c_str(), x, y, kEliteNameSize, eliteInfo(e.elite()).color);
     }
 }

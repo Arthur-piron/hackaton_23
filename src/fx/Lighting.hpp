@@ -13,6 +13,8 @@
 class Lighting {
 public:
     static constexpr int kMaxLights = 24;
+    // Ambiance de la nuit, changée par les événements de vague (fondu de quelques secondes).
+    enum class Mood { Night, BloodMoon, Fog };
 
     Lighting();
     ~Lighting();
@@ -35,6 +37,12 @@ public:
     void setFlashlight(bool on, float intensity);
     void aimFlashlight(Vector3 position, Vector3 direction);
 
+    void setMood(Mood mood);
+    // Coupure de courant : les lampes électriques du décor grésillent puis s'éteignent ; les feux restent.
+    void setPowerCut(bool cut) { powerCut_ = cut; }
+    // Couleur du fond de l'écran, assortie au brouillard de l'ambiance.
+    Color backgroundColor() const;
+
     // Choisit les lumières proches de focus et envoie les uniforms au shader.
     void update(float dt, Vector3 focus);
 
@@ -51,12 +59,25 @@ private:
         float duration;
         float left;
     };
+    struct Atmosphere {
+        Vector3 ambientSky;
+        Vector3 ambientGround;
+        Vector3 moonColor;
+        Vector3 fogColor;
+        Vector3 mistColor;
+        float fogStart;
+        float fogEnd;
+    };
     struct ActiveLight {
         PointLight light;
         float strength;  // intensité après vacillement
     };
 
     float flickerAt(const PointLight& light, int index) const;
+    // Intensité d'une lumière du décor pendant une coupure (1 : courant normal).
+    float powerAt(const PointLight& light, int index) const;
+    static Atmosphere atmosphereOf(Mood mood);
+    void sendAtmosphere(float dt);
 
     Shader shader_{};
     Texture2D glow_{};
@@ -81,6 +102,10 @@ private:
     std::vector<PointLight> dynamic_;
     std::vector<ActiveLight> active_;
     float time_ = 0.0f;
+    Atmosphere atmosphere_{};
+    Mood mood_ = Mood::Night;
+    bool powerCut_ = false;
+    float power_ = 1.0f;     // 1 : lampes allumées, 0 : coupure complète
     std::vector<Flash> flashes_;
     bool flashlightOn_ = true;
     float flashlightIntensity_ = 1.0f;

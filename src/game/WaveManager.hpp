@@ -2,8 +2,10 @@
 
 #include "core/AnimatedModel.hpp"
 #include "fx/PointLight.hpp"
+#include "game/Boss.hpp"
 #include "game/Enemy.hpp"
 #include "game/Events.hpp"
+#include "game/WaveEvent.hpp"
 
 #include <array>
 #include <cstddef>
@@ -32,6 +34,14 @@ public:
     float update(float dt, Vector3 playerPosition, Vector3 playerForward, const World& world, const Zones& zones,
                  EventQueue& events);
     void draw() const;
+    // Barre de vie du boss en bas de l'écran (2D, après la scène 3D).
+    void drawBossBar() const { bosses_.drawHealthBar(enemies_); }
+    // Un boss est en vie (musique de boss).
+    bool bossActive() const;
+    // Noms des élites au-dessus de leur tête (2D, après la scène 3D).
+    void drawEliteNames(const Camera3D& camera, Vector3 playerPosition) const;
+    // Lueur colorée de chaque élite, à ajouter à l'éclairage à chaque image.
+    std::vector<PointLight> eliteLights() const;
     // Fait passer les modèles des morts par ce shader (éclairage de nuit).
     void setShader(const Shader& shader);
     // Passe immédiatement à la vague suivante pendant la pause.
@@ -44,12 +54,15 @@ public:
     void setFlowField(const FlowField* field) { flowField_ = field; }
     // Fait apparaître un cercle d'ennemis autour d'un point (tests automatiques).
     void spawnRing(Vector3 center, float radius, int count, EnemyType type);
-    // Règles du mode de jeu : endless = pas de victoire à la vague 10 ; vie des morts multipliée.
-    void setRules(bool endless, float healthMultiplier);
+    // Règles du mode de jeu : endless = pas de victoire à la vague 10 ; vie des morts et chance d'élite multipliées.
+    void setRules(bool endless, float healthMultiplier, float eliteChance);
 
     std::vector<Enemy>& enemies() { return enemies_; }
     const std::vector<Enemy>& enemies() const { return enemies_; }
     int wave() const { return wave_; }
+    // Événement de la vague en cours (None pendant les pauses).
+    WaveEvent event() const { return event_; }
+    int goldMultiplier() const { return waveEventInfo(event_).goldMultiplier; }
     Phase phase() const { return phase_; }
     float intermissionLeft() const { return phase_ == Phase::Intermission ? timer_ : 0.0f; }
     int remaining() const;
@@ -58,6 +71,7 @@ public:
 private:
     void startWave(EventQueue& events);
     EnemyType pickType() const;
+    void spawnEnemy(Vector3 playerPosition, const World& world, const Zones& zones);
     EnemySenses sense(const Enemy& enemy, Vector3 playerPosition, Vector3 playerForward, const Zones& zones) const;
     bool inFlashlight(Vector3 position) const;
     Vector3 lightEscape(Vector3 position) const;
@@ -70,6 +84,8 @@ private:
 
     std::array<std::shared_ptr<AnimatedModel>, static_cast<size_t>(EnemyType::Count)> models_;
     std::vector<Enemy> enemies_;
+    Bosses bosses_;
+    float bossDelay_ = -1.0f;     // >= 0 : le boss de la vague apparaît dans ce délai
     std::vector<PointLight> lights_;
     bool flashlightOn_ = false;
     const FlowField* flowField_ = nullptr;
@@ -77,11 +93,15 @@ private:
     Vector3 flashlightDirection_ = {0.0f, 0.0f, 1.0f};
     Phase phase_ = Phase::Intermission;
     int wave_ = 0;
+    WaveEvent event_ = WaveEvent::None;
+    WaveEvent lastEvent_ = WaveEvent::None;
     float timer_ = 0.0f;
     int toSpawn_ = 0;
     float spawnTimer_ = 0.0f;
     bool cleared_ = false;
     bool endless_ = false;
     float healthMultiplier_ = 1.0f;
+    float eliteChance_ = 1.0f;
+    float time_ = 0.0f;           // pulsation des halos d'élite
     unsigned nextId_ = 1;
 };
