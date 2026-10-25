@@ -25,6 +25,9 @@ constexpr float kDeathShake = 0.8f;
 constexpr float kLookAhead = 0.25f;   // fraction de la distance de visée ajoutée au cadrage
 constexpr float kMaxLookAhead = 3.0f;
 constexpr float kAimAssistScale = 1.4f; // le survol d'un mort compte un peu au-delà de son corps
+// Le tir part du canon vers le point visé, sauf cible trop proche ou trop de biais (gardien encore en train de tourner).
+constexpr float kMinAimDistance = 1.2f;
+constexpr float kMaxAimDeviation = 0.5f; // radians d'écart toléré avec le regard
 constexpr float kFootstepInterval = 0.36f;
 constexpr float kSprintFootstepInterval = 0.26f;
 constexpr int kSmokeWeapon = 2; // mitraillette
@@ -425,6 +428,20 @@ Vector3 Game::mouseAimPoint() const
     return mouseOnPlane(player_->muzzle().y);
 }
 
+Vector3 Game::shotDirection(Vector3 aim) const
+{
+    // Le canon est dans la main droite, décalé du centre du gardien : tirer parallèlement
+    // au regard ferait passer la balle à côté de la cible, surtout quand elle est de côté.
+    const Vector3 forward = player_->forward();
+    const Vector3 muzzle = player_->muzzle();
+    const Vector3 toAim = {aim.x - muzzle.x, 0.0f, aim.z - muzzle.z};
+    const float distance = Vector3Length(toAim);
+    if (distance < kMinAimDistance) return forward;
+    const Vector3 direction = Vector3Scale(toAim, 1.0f / distance);
+    const float deviation = std::acos(std::clamp(Vector3DotProduct(direction, forward), -1.0f, 1.0f));
+    return deviation > kMaxAimDeviation ? forward : direction;
+}
+
 Vector3 Game::mouseOnPlane(float height) const
 {
     const Ray ray = GetScreenToWorldRay(GetMousePosition(), cameraRig_.camera());
@@ -620,7 +637,7 @@ void Game::updatePlaying(float dt)
     if (alive && !building) {
         if (c.selectWeapon >= 0) arsenal_.select(c.selectWeapon);
         if (c.cycleWeapon != 0) arsenal_.cycle(c.cycleWeapon);
-        if (arsenal_.update(dt, c.fireHeld, c.firePressed, c.reload, player_->muzzle(), player_->forward(),
+        if (arsenal_.update(dt, c.fireHeld, c.firePressed, c.reload, player_->muzzle(), shotDirection(c.aim),
                             projectiles_, events_)) {
             player_->notifyShot();
             player_->applyRecoil(Vector3Scale(player_->forward(), -arsenal_.stats().recoil));

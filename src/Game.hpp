@@ -146,6 +146,8 @@ private:
     HudData hudData() const;
     // Point visé : le torse du mort sous le curseur, sinon le curseur projeté à hauteur du canon.
     Vector3 mouseAimPoint() const;
+    // Direction du tir : du canon vers le point visé (le regard si la cible est trop proche ou trop de biais).
+    Vector3 shotDirection(Vector3 aim) const;
     // Curseur projeté sur le plan horizontal à la hauteur donnée.
     Vector3 mouseOnPlane(float height) const;
 
