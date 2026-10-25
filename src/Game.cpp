@@ -180,7 +180,7 @@ Game::Game(const Options& options)
 {
     // --smoke ne se cale ni sur l'écran ni sur une limite d'images : le profil mesure le vrai coût.
     const bool smoke = options_.smokeFrames > 0;
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | (smoke ? 0u : FLAG_VSYNC_HINT));
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | (smoke ? 0u : static_cast<unsigned>(FLAG_VSYNC_HINT)));
     InitWindow(kScreenWidth, kScreenHeight, kWindowTitle);
     fonts::load();
     InitAudioDevice();
