@@ -28,6 +28,8 @@ constexpr float kFlashlightRange = 14.0f;
 constexpr float kFlashlightHalfAngle = 27.0f * DEG2RAD;
 // Les vampires évitent le cœur des lumières du décor (fraction de leur portée).
 constexpr float kLightAvoidFraction = 0.7f;
+// Le boss d'une vague arrive quelques secondes après l'annonce de la vague.
+constexpr float kBossSpawnDelay = 4.0f;
 // Élites : anneau pulsant au sol, lueur colorée et nom au-dessus de la tête.
 constexpr float kEliteRingRadius = 0.75f;
 constexpr float kEliteRingHeight = 0.03f;
@@ -93,6 +95,7 @@ WaveManager::~WaveManager() = default;
 
 void WaveManager::setShader(const Shader& shader)
 {
+    bosses_.setShader(shader);
     for (const std::shared_ptr<AnimatedModel>& model : models_) {
         Model& m = model->model();
         for (int i = 0; i < m.materialCount; ++i) m.materials[i].shader = shader;
@@ -102,6 +105,8 @@ void WaveManager::setShader(const Shader& shader)
 void WaveManager::reset()
 {
     enemies_.clear();
+    bosses_.reset();
+    bossDelay_ = -1.0f;
     phase_ = Phase::Intermission;
     wave_ = 0;
     event_ = WaveEvent::None;
@@ -116,7 +121,15 @@ int WaveManager::remaining() const
 {
     int alive = 0;
     for (const Enemy& e : enemies_) alive += e.isAlive() ? 1 : 0;
-    return alive + toSpawn_;
+    return alive + toSpawn_ + (bossDelay_ >= 0.0f ? 1 : 0);
+}
+
+bool WaveManager::bossActive() const
+{
+    for (const Enemy& e : enemies_) {
+        if (e.isBoss() && e.isAlive()) return true;
+    }
+    return false;
 }
 
 void WaveManager::skipIntermission()
@@ -149,6 +162,7 @@ void WaveManager::startWave(EventQueue& events)
     toSpawn_ = waveQuota(wave_);
     if (event_ == WaveEvent::Horde) toSpawn_ *= waveEvents::kHordeQuotaMultiplier;
     spawnTimer_ = 0.0f;
+    bossDelay_ = wave_ % boss::kBossCycle == boss::kGravediggerWave ? kBossSpawnDelay : -1.0f;
     events.push_back({EventType::WaveStarted, {0.0f, 0.0f, 0.0f}, static_cast<float>(wave_)});
 }
 
@@ -328,7 +342,18 @@ float WaveManager::update(float dt, Vector3 playerPosition, Vector3 playerForwar
         }
     }
 
-    float damage = 0.0f;
+    if (bossDelay_ >= 0.0f) {
+        bossDelay_ -= dt;
+        if (bossDelay_ < 0.0f) {
+            const EnemyType type = EnemyType::Gravedigger;
+            enemies_.emplace_back(nextId_++, type, *models_[static_cast<size_t>(type)],
+                                  pickSpawnPoint(playerPosition, world, zones));
+            enemies_.back().scaleHealth(healthMultiplier_);
+            events.push_back({EventType::BossSpawned, enemies_.back().position(), static_cast<float>(type)});
+        }
+    }
+
+    float damage = bosses_.update(dt, enemies_, playerPosition, events);
     // Chaque mort marche vers le joueur, ou vers la grille qui mène à sa zone.
     for (Enemy& e : enemies_) damage += e.update(dt, sense(e, playerPosition, playerForward, zones), events);
     separate(dt);
@@ -352,6 +377,7 @@ void WaveManager::draw() const
     for (const Enemy& e : enemies_) {
         if (!e.stats().ethereal) e.draw();
     }
+    bosses_.draw();
     const float pulse = 0.5f + 0.5f * std::sin(time_ * kElitePulseSpeed);
     for (const Enemy& e : enemies_) {
         if (!e.isElite() || !e.isAlive()) continue;

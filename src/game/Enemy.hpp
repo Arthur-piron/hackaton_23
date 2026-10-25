@@ -5,7 +5,7 @@
 #include "game/Events.hpp"
 #include "raylib.h"
 
-enum class EnemyType { Walker, Runner, Skeleton, Brute, Vampire, Ghost, Count };
+enum class EnemyType { Walker, Runner, Skeleton, Brute, Vampire, Ghost, Gravedigger, Count };
 
 struct EnemyStats {
     const char* name;
@@ -48,6 +48,8 @@ public:
     bool hit(float damage, Vector3 direction, float knockback, EventQueue& events);
     // En fait une élite (à l'apparition) : plus de vie, halo, effet du modificateur.
     void makeElite(EliteKind kind);
+    // Joue une animation d'action (lancer...) : il s'arrête et fait face au joueur jusqu'à la fin.
+    void gesture(const char* clip, float speed);
     // Ralentit de `fraction` (0..1) pendant `duration` secondes ; le plus fort ralentissement l'emporte.
     void slow(float fraction, float duration);
     void push(Vector3 offset);
@@ -59,6 +61,8 @@ public:
 
     bool isAlive() const { return state_ != State::Dying; }
     bool isRemovable() const { return removable_; }
+    bool isBoss() const { return type_ == EnemyType::Gravedigger; }
+    bool isGesturing() const { return state_ == State::Gesturing; }
     bool isSlowed() const { return slowTimer_ > 0.0f; }
     // Vampire qui fuit la lumière.
     bool isFleeing() const { return fleeing_; }
@@ -78,7 +82,7 @@ public:
     unsigned id() const { return id_; }
 
 private:
-    enum class State { Chasing, Attacking, Dying };
+    enum class State { Chasing, Attacking, Gesturing, Dying };
 
     // Point visé par un vampire : il tourne autour du joueur pour le prendre de dos.
     Vector3 flankPoint(const EnemySenses& senses) const;

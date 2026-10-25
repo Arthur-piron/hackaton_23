@@ -56,6 +56,8 @@ const EnemyStats kStats[] = {
      0.3f, true, false},
     {"Spectre", "character-ghost.glb", 70.0f, 2.3f, 14.0f, 1.3f, 1.4f, 1.05f, {190, 225, 255, kGhostAlpha}, "idle", 2.3f,
      25, 0.6f, false, true},
+    {"Le Fossoyeur", "character-zombie.glb", 2200.0f, 1.3f, 40.0f, 1.4f, 2.2f, 2.2f, {125, 110, 95, 255}, "walk", 1.0f,
+     500, 1.0f, false, false},
 };
 static_assert(sizeof(kStats) / sizeof(kStats[0]) == static_cast<size_t>(EnemyType::Count), "un profil par type d'ennemi");
 
@@ -219,6 +221,14 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
     float damage = 0.0f;
     const float reach = s.attackRange * s.scale;
 
+    if (state_ == State::Gesturing) {
+        if (model_->isFinished(anim_)) {
+            state_ = State::Chasing;
+            model_->play(anim_, clipMove_, true, pace);
+        }
+        return 0.0f;
+    }
+
     if (state_ == State::Attacking) {
         const float duration = model_->clipDuration(clipAttack_);
         if (!attackDealt_ && anim_.time >= duration * kAttackImpactFraction) {
@@ -279,6 +289,14 @@ bool Enemy::hit(float damage, Vector3 direction, float knockback, EventQueue& ev
     const int score = isElite() ? s.score * elites::kRewardMultiplier : s.score;
     events.push_back({EventType::EnemyKilled, hitCenter(), static_cast<float>(score), flat});
     return true;
+}
+
+void Enemy::gesture(const char* clip, float speed)
+{
+    const int index = model_->findClip(clip);
+    if (state_ == State::Dying || index < 0) return;
+    state_ = State::Gesturing;
+    model_->play(anim_, index, false, speed, true);
 }
 
 void Enemy::slow(float fraction, float duration)

@@ -2,6 +2,7 @@
 
 #include "core/AnimatedModel.hpp"
 #include "fx/PointLight.hpp"
+#include "game/Boss.hpp"
 #include "game/Enemy.hpp"
 #include "game/Events.hpp"
 #include "game/WaveEvent.hpp"
@@ -33,6 +34,10 @@ public:
     float update(float dt, Vector3 playerPosition, Vector3 playerForward, const World& world, const Zones& zones,
                  EventQueue& events);
     void draw() const;
+    // Barre de vie du boss en bas de l'écran (2D, après la scène 3D).
+    void drawBossBar() const { bosses_.drawHealthBar(enemies_); }
+    // Un boss est en vie (musique de boss).
+    bool bossActive() const;
     // Noms des élites au-dessus de leur tête (2D, après la scène 3D).
     void drawEliteNames(const Camera3D& camera, Vector3 playerPosition) const;
     // Lueur colorée de chaque élite, à ajouter à l'éclairage à chaque image.
@@ -79,6 +84,8 @@ private:
 
     std::array<std::shared_ptr<AnimatedModel>, static_cast<size_t>(EnemyType::Count)> models_;
     std::vector<Enemy> enemies_;
+    Bosses bosses_;
+    float bossDelay_ = -1.0f;     // >= 0 : le boss de la vague apparaît dans ce délai
     std::vector<PointLight> lights_;
     bool flashlightOn_ = false;
     const FlowField* flowField_ = nullptr;

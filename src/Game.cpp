@@ -61,6 +61,10 @@ constexpr int kFortuneComboMultiplier = 5;
 constexpr int kFortuneCoins = 50;
 constexpr int kFortuneGoldPerCoin = 5;
 constexpr float kExplosionShake = 0.35f;
+// Boss : annonce et pierres tombales du Fossoyeur.
+constexpr Color kBossColor = {230, 60, 45, 255};
+constexpr Color kTombstoneDebrisColor = {150, 150, 160, 255};
+constexpr int kTombstoneDebrisChunks = 16;
 constexpr float kFrostSlow = 0.3f;
 constexpr float kFrostDuration = 1.5f;
 
@@ -641,6 +645,12 @@ void Game::updatePlaying(float dt)
 
     projectiles_.update(dt);
     const float damage = waves_->update(dt, player_->position(), player_->forward(), *world_, *zones_, events_);
+    // Pierres tombales du Fossoyeur : dégâts à la structure dans la zone d'impact (indices : damage publie).
+    for (size_t i = 0, count = events_.size(); i < count; ++i) {
+        if (events_[i].type != EventType::TombstoneImpact) continue;
+        const int id = structures_->blockingNear(events_[i].position, events_[i].value);
+        if (id >= 0) structures_->damage(id, boss::kTombstoneStructureDamage, events_);
+    }
     resolveProjectiles();
     for (const Flashlight::LightTick& tick :
          flashlight_.illuminate(dt, player_->position(), player_->forward(), waves_->enemies(), *world_)) {
@@ -681,7 +691,7 @@ void Game::updatePlaying(float dt)
     const int aliveEnemies = static_cast<int>(std::count_if(waves_->enemies().begin(), waves_->enemies().end(),
                                                               [](const Enemy& e) { return e.isAlive(); }));
     musicDirector_.update(dt, audio_, aliveEnemies, waves_->phase() == WaveManager::Phase::Intermission,
-                          waves_->wave(), 0);
+                          waves_->wave(), waves_->bossActive() ? waves_->wave() : 0);
     updateFootsteps(dt);
     handleEvents();
 
@@ -1266,6 +1276,17 @@ void Game::handleEvents()
                               ev.value * 2.0f, kExplosionLightIntensity, 0.0f, 0.0f},
                              kExplosionLightDuration);
             break;
+        case EventType::BossSpawned:
+            audio_.play("wave_bell", 1.0f, 0.0f);
+            cameraRig_.shake(kDeathShake);
+            hud_.announce(enemyStats(static_cast<EnemyType>(static_cast<int>(ev.value))).name,
+                          "Il vient creuser vos tombes...", kBossColor);
+            break;
+        case EventType::TombstoneImpact:
+            particles_->debris(ev.position, kTombstoneDebrisColor, kTombstoneDebrisChunks);
+            audio_.playAt("hit_heavy", ev.position, 1.0f, 0.15f);
+            cameraRig_.shake(kExplosionShake);
+            break;
         case EventType::LastStand:
             audio_.play("wave_bell", 0.9f, 0.0f);
             cameraRig_.shake(kDeathShake);
@@ -1469,6 +1490,7 @@ void Game::draw() const
             }
         }
         waves_->drawEliteNames(cameraRig_.camera(), player_->position());
+        waves_->drawBossBar();
         hud_.draw(cameraRig_.camera(), hudData());
         if (state_ == State::Playing) {
             structures_->drawHealthBars(cameraRig_.camera(), player_->position());
