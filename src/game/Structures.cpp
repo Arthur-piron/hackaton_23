@@ -51,7 +51,7 @@ constexpr float kPipSize = 6.0f;
 constexpr Color kPipColor = {255, 205, 90, 255};
 
 // Dégâts par seconde aux structures, dans l'ordre d'EnemyType (GAME.md §7.4).
-constexpr float kDamagePerSecond[] = {10.0f, 9.0f, 10.0f, 50.0f, 12.0f, 0.0f, 80.0f};
+constexpr float kDamagePerSecond[] = {10.0f, 9.0f, 10.0f, 50.0f, 12.0f, 0.0f, 80.0f, 120.0f};
 static_assert(sizeof(kDamagePerSecond) / sizeof(kDamagePerSecond[0]) == static_cast<size_t>(EnemyType::Count),
               "des dégâts par type d'ennemi");
 

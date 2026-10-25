@@ -72,6 +72,8 @@ private:
     void startWave(EventQueue& events);
     EnemyType pickType() const;
     void spawnEnemy(Vector3 playerPosition, const World& world, const Zones& zones);
+    // Marcheurs invoqués par un boss, en cercle autour de lui.
+    void summonWalkers(Vector3 center, int count, const World& world);
     EnemySenses sense(const Enemy& enemy, Vector3 playerPosition, Vector3 playerForward, const Zones& zones) const;
     bool inFlashlight(Vector3 position) const;
     Vector3 lightEscape(Vector3 position) const;
@@ -86,6 +88,7 @@ private:
     std::vector<Enemy> enemies_;
     Bosses bosses_;
     float bossDelay_ = -1.0f;     // >= 0 : le boss de la vague apparaît dans ce délai
+    EnemyType bossType_ = EnemyType::Gravedigger;
     std::vector<PointLight> lights_;
     bool flashlightOn_ = false;
     const FlowField* flowField_ = nullptr;

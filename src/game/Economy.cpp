@@ -13,6 +13,7 @@ const Economy::Reward kKillRewards[] = {
     {10, 7},  // Vampire
     {9, 6},   // Spectre
     {150, 100}, // Le Fossoyeur
+    {400, 300}, // Le Rongé
 };
 static_assert(sizeof(kKillRewards) / sizeof(kKillRewards[0]) == static_cast<size_t>(EnemyType::Count),
               "une récompense par type d'ennemi");
@@ -76,6 +77,7 @@ Economy::Salvage Economy::rollSalvage(EnemyType type)
         {0.0f, 0, 0.35f, 1},  // vampire
         {0.0f, 0, 0.0f, 0},   // spectre
         {1.0f, 8, 1.0f, 6},   // le Fossoyeur
+        {1.0f, 15, 1.0f, 12}, // le Rongé
     };
     static_assert(sizeof(kDrops) / sizeof(kDrops[0]) == static_cast<size_t>(EnemyType::Count),
                   "un butin par type d'ennemi");

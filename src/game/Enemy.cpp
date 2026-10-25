@@ -58,6 +58,8 @@ const EnemyStats kStats[] = {
      25, 0.6f, false, true},
     {"Le Fossoyeur", "character-zombie.glb", 2200.0f, 1.3f, 40.0f, 1.4f, 2.2f, 2.2f, {125, 110, 95, 255}, "walk", 1.0f,
      500, 1.0f, false, false},
+    {"Le Rongé", "character-zombie.glb", 6500.0f, 1.6f, 55.0f, 1.3f, 2.0f, 3.0f, {175, 140, 160, 255}, "walk", 1.0f,
+     1500, 1.0f, false, false},
 };
 static_assert(sizeof(kStats) / sizeof(kStats[0]) == static_cast<size_t>(EnemyType::Count), "un profil par type d'ennemi");
 
@@ -207,7 +209,8 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
 
     // Il regarde le joueur, sauf quand il s'enfuit.
     const Vector3 look = fleeing_ ? heading : flatTo(position_, senses.goal);
-    if (Vector3Length(look) > 0.001f) {
+    const bool facingLocked = state_ == State::Gesturing && gestureTimed_;
+    if (!facingLocked && Vector3Length(look) > 0.001f) {
         yaw_ += angleDelta(yaw_, std::atan2(look.x, look.z)) * (1.0f - std::exp(-kTurnSharpness * dt));
     }
 
@@ -222,7 +225,8 @@ float Enemy::update(float dt, const EnemySenses& senses, EventQueue& events)
     const float reach = s.attackRange * s.scale;
 
     if (state_ == State::Gesturing) {
-        if (model_->isFinished(anim_)) {
+        gestureLeft_ -= dt;
+        if (gestureTimed_ ? gestureLeft_ <= 0.0f : model_->isFinished(anim_)) {
             state_ = State::Chasing;
             model_->play(anim_, clipMove_, true, pace);
         }
@@ -291,12 +295,19 @@ bool Enemy::hit(float damage, Vector3 direction, float knockback, EventQueue& ev
     return true;
 }
 
-void Enemy::gesture(const char* clip, float speed)
+void Enemy::gesture(const char* clip, float speed, float duration)
 {
     const int index = model_->findClip(clip);
     if (state_ == State::Dying || index < 0) return;
     state_ = State::Gesturing;
-    model_->play(anim_, index, false, speed, true);
+    gestureLeft_ = duration;
+    gestureTimed_ = duration > 0.0f;
+    model_->play(anim_, index, duration > 0.0f, speed, true);
+}
+
+void Enemy::face(Vector3 direction)
+{
+    if (std::fabs(direction.x) + std::fabs(direction.z) > 1e-4f) yaw_ = std::atan2(direction.x, direction.z);
 }
 
 void Enemy::slow(float fraction, float duration)
