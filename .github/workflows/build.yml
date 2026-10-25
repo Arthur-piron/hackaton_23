@@ -13,7 +13,7 @@ concurrency:
 jobs:
   linux:
     name: Linux (gcc)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # même gcc 11 que la release : une inclusion oubliée casse dès la PR
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
