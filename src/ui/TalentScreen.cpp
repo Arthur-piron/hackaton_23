@@ -2,6 +2,7 @@
 
 #include "core/Fonts.hpp"
 
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -50,7 +51,7 @@ void TalentScreen::open()
 
 Rectangle TalentScreen::rowRect(int index) const
 {
-    const float x = (static_cast<float>(GetScreenWidth()) - kPanelWidth) / 2.0f;
+    const float x = (ui::width() - kPanelWidth) / 2.0f;
     return {x, kTop + static_cast<float>(index) * (kRowHeight + kRowGap), kPanelWidth, kRowHeight};
 }
 
@@ -64,7 +65,7 @@ TalentScreen::Result TalentScreen::update(float dt)
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) selected_ = (selected_ + talentCount() - 1) % talentCount();
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) selected_ = (selected_ + 1) % talentCount();
 
-    const Vector2 mouse = GetMousePosition();
+    const Vector2 mouse = ui::mouse();
     bool clicked = false;
     for (int i = 0; i < talentCount(); ++i) {
         if (!CheckCollisionPointRec(mouse, rowRect(i))) continue;
@@ -89,8 +90,8 @@ void TalentScreen::notifyPurchase(bool bought)
 
 void TalentScreen::draw(const Progression& progression) const
 {
-    const int w = GetScreenWidth();
-    const int h = GetScreenHeight();
+    const int w = ui::screenWidth();
+    const int h = ui::screenHeight();
     DrawRectangle(0, 0, w, h, kBackground);
 
     drawCentered("TALENTS", w / 2, 40, 56, kTitle);
@@ -146,5 +147,5 @@ void TalentScreen::draw(const Progression& progression) const
     drawCentered(records, w / 2, h - 84, 18, kTextDim);
     drawCentered("Entrée / clic : acheter   Échap : retour   1 ossement par vague survécue", w / 2, h - 52, 18,
                  kTextDim);
-    DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
+    DrawCircleV(ui::mouse(), 5.0f, {255, 230, 170, 200});
 }

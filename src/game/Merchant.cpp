@@ -3,6 +3,7 @@
 #include "core/Fonts.hpp"
 
 #include "game/Scale.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -90,7 +91,7 @@ void Merchant::drawPrompt(const Camera3D& camera, Vector3 player, bool open) con
 {
     const float distance = distanceTo(player);
     if (distance > kSignDistance) return;
-    const Vector2 screen = GetWorldToScreen(Vector3Add(position_, {0.0f, kSignHeight, 0.0f}), camera);
+    const Vector2 screen = ui::fromScreen(GetWorldToScreen(Vector3Add(position_, {0.0f, kSignHeight, 0.0f}), camera));
     if (distance > kInteractDistance) {
         drawCenteredText(open ? "MARCHAND" : "MARCHAND - fermé", screen, 18, open ? kSignColor : kClosedColor);
         return;

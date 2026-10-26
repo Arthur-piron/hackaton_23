@@ -2,6 +2,7 @@
 
 #include "core/AssetPath.hpp"
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 #include "raylib.h"
 #include "raymath.h"
 
@@ -1141,7 +1142,9 @@ void Game::applySettings()
     const Settings& s = progression_->settings();
     audio_.setVolumes(static_cast<float>(s.master) / 100.0f, static_cast<float>(s.music) / 100.0f,
                       static_cast<float>(s.effects) / 100.0f);
-    if (IsWindowFullscreen() != s.fullscreen) ToggleFullscreen();
+    // Plein écran fenêtré : la fenêtre prend la résolution native de l'écran (ToggleFullscreen
+    // gardait 1280 x 720 et laissait l'image dans un coin ou étirée selon le système).
+    if (IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) != s.fullscreen) ToggleBorderlessWindowed();
 }
 
 void Game::endRun(bool victory)
@@ -1507,6 +1510,19 @@ void Game::draw() const
     BeginDrawing();
     ClearBackground(kBackgroundColor);
 
+    const bool inMenus = state_ == State::Menu || state_ == State::Talents || state_ == State::Options ||
+                         state_ == State::Credits;
+    // Le monde est rendu à la résolution réelle, l'interface par-dessus à l'échelle de l'écran.
+    if (!inMenus) {
+        postFx_->begin();
+        ClearBackground(lighting_->backgroundColor());
+        drawWorld();
+        Profiler::Scope scope(profiler_, "postfx");
+        postFx_->end();
+        postFx_->draw();
+    }
+
+    ui::begin();
     if (state_ == State::Menu) {
         mainMenu_.draw(*progression_);
     } else if (state_ == State::Talents) {
@@ -1516,14 +1532,6 @@ void Game::draw() const
     } else if (state_ == State::Credits) {
         creditsScreen_.draw();
     } else {
-        postFx_->begin();
-        ClearBackground(lighting_->backgroundColor());
-        drawWorld();
-        {
-            Profiler::Scope scope(profiler_, "postfx");
-            postFx_->end();
-            postFx_->draw();
-        }
         const bool intermission = waves_->phase() == WaveManager::Phase::Intermission;
         if (state_ == State::Playing && !player_->isDead()) {
             zones_->drawPrompt(cameraRig_.camera(), player_->position(), economy_.gold());
@@ -1554,6 +1562,7 @@ void Game::draw() const
         if (state_ == State::GameOver) drawEndScreen("TU ES MORT", {220, 50, 50, 255});
         if (state_ == State::Victory) drawEndScreen("L'AUBE SE LÈVE", {255, 210, 120, 255});
     }
+    ui::end();
 
     DrawFPS(10, 10);
     EndDrawing();
@@ -1622,8 +1631,8 @@ void Game::drawEyes() const
 
 void Game::drawPauseOverlay() const
 {
-    const int w = GetScreenWidth();
-    const int h = GetScreenHeight();
+    const int w = ui::screenWidth();
+    const int h = ui::screenHeight();
     DrawRectangle(0, 0, w, h, {0, 0, 0, 150});
     const char* text = "PAUSE";
     const char* hint = "Échap : reprendre   Ctrl+Q : menu";
@@ -1633,8 +1642,8 @@ void Game::drawPauseOverlay() const
 
 void Game::drawEndScreen(const char* title, Color color) const
 {
-    const int w = GetScreenWidth();
-    const int h = GetScreenHeight();
+    const int w = ui::screenWidth();
+    const int h = ui::screenHeight();
     DrawRectangle(0, 0, w, h, {0, 0, 0, 170});
     fonts::drawText(title, (w - fonts::measureText(title, 80)) / 2, h / 3, 80, color);
     const char* stats = TextFormat("%s   -   vague %d   -   %d morts   -   score %d", gameModeRules(mode_).name,

@@ -3,6 +3,7 @@
 #include "core/Fonts.hpp"
 
 #include "ui/CardPicker.hpp"
+#include "ui/UiScale.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -251,7 +252,7 @@ void ShopScreen::open(int weapon, int gold)
     message_.clear();
     messageAge_ = 999.0f;
     time_ = 0.0f;
-    lastMouse_ = GetMousePosition();
+    lastMouse_ = ui::mouse();
 }
 
 void ShopScreen::focus(int item)
@@ -286,8 +287,8 @@ void ShopScreen::notifyPurchase(bool success, const std::string& message)
 
 Rectangle ShopScreen::columnRect(int index) const
 {
-    const float w = static_cast<float>(GetScreenWidth());
-    const float h = static_cast<float>(GetScreenHeight());
+    const float w = ui::width();
+    const float h = ui::height();
     const float width = std::min(kMaxColumnWidth, (w - 2.0f * kMarginX - 2.0f * kColumnGap) / 3.0f);
     const float total = 3.0f * width + 2.0f * kColumnGap;
     const float x = (w - total) / 2.0f + static_cast<float>(index) * (width + kColumnGap);
@@ -357,7 +358,7 @@ ShopScreen::Result ShopScreen::update(float dt, const Shop& shop, const Arsenal&
     }
 
     // Souris : le survol déplace la sélection seulement si la souris bouge (le clavier garde la main sinon).
-    const Vector2 mouse = GetMousePosition();
+    const Vector2 mouse = ui::mouse();
     const bool mouseMoved = Vector2{mouse.x - lastMouse_.x, mouse.y - lastMouse_.y}.x != 0.0f &&
                                 std::fabs(mouse.x - lastMouse_.x) > kMouseMoveThreshold ||
                             std::fabs(mouse.y - lastMouse_.y) > kMouseMoveThreshold;
@@ -397,7 +398,7 @@ void ShopScreen::drawHeader(int gold, float frozenLeft, float waveIn) const
     const float alpha = std::min(1.0f, time_ / kDimDuration);
     const Rectangle first = columnRect(0);
     const Rectangle last = columnRect(kColumns - 1);
-    const float cx = static_cast<float>(GetScreenWidth()) / 2.0f;
+    const float cx = ui::width() / 2.0f;
     const float top = first.y - 104.0f;
 
     drawCentered("LE MARCHAND", cx, top, 50.0f, fade(kTitle, alpha));
@@ -553,8 +554,8 @@ void ShopScreen::drawRow(int columnIndex, int row, const Shop& shop) const
 
 void ShopScreen::draw(const Shop& shop, const Arsenal& arsenal, int gold, float frozenLeft, float waveIn) const
 {
-    const int w = GetScreenWidth();
-    const int h = GetScreenHeight();
+    const int w = ui::screenWidth();
+    const int h = ui::screenHeight();
     DrawRectangle(0, 0, w, h, fade(kDim, std::min(1.0f, time_ / kDimDuration)));
 
     drawHeader(gold, frozenLeft, waveIn);
@@ -570,7 +571,7 @@ void ShopScreen::draw(const Shop& shop, const Arsenal& arsenal, int gold, float 
     drawCentered("Flèches / ZQSD : choisir    Entrée / clic : acheter    Tab / 1-4 : arme    E / Échap : fermer", cx,
                  static_cast<float>(h) - 30.0f, 16.0f, fade(kTextDim, std::min(1.0f, time_ / kDimDuration)));
 
-    const Vector2 m = GetMousePosition();
+    const Vector2 m = ui::mouse();
     DrawCircleV(m, 6.0f, {255, 230, 170, 230});
     DrawCircleLinesV(m, 10.0f, {255, 230, 170, 160});
 }

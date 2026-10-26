@@ -1,6 +1,7 @@
 #include "ui/CardPicker.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -209,8 +210,8 @@ Rectangle CardPicker::baseRect(int index) const
 {
     const float count = static_cast<float>(slots_.size());
     const float total = count * kCardWidth + (count - 1.0f) * kCardGap;
-    const float x = (static_cast<float>(GetScreenWidth()) - total) / 2.0f + static_cast<float>(index) * (kCardWidth + kCardGap);
-    const float y = (static_cast<float>(GetScreenHeight()) - kCardHeight) / 2.0f + 30.0f;
+    const float x = (ui::width() - total) / 2.0f + static_cast<float>(index) * (kCardWidth + kCardGap);
+    const float y = (ui::height() - kCardHeight) / 2.0f + 30.0f;
     return {x, y, kCardWidth, kCardHeight};
 }
 
@@ -219,7 +220,7 @@ Rectangle CardPicker::animatedRect(int index, float& scale, float& alpha) const
     Rectangle r = baseRect(index);
     const Slot& slot = slots_[static_cast<size_t>(index)];
     const float t = std::clamp((time_ - kIntroDelay * static_cast<float>(index)) / kIntroDuration, 0.0f, 1.0f);
-    const float slide = (1.0f - easeOutBack(t)) * static_cast<float>(GetScreenHeight()) * 0.7f;
+    const float slide = (1.0f - easeOutBack(t)) * ui::height() * 0.7f;
     alpha = std::min(1.0f, t * 2.5f);
     scale = 1.0f + kHoverScale * slot.hover;
     float lift = kHoverLift * slot.hover;
@@ -230,7 +231,7 @@ Rectangle CardPicker::animatedRect(int index, float& scale, float& alpha) const
             scale += 0.12f * o;
             alpha *= 1.0f - o * o;
         } else {
-            lift -= o * o * static_cast<float>(GetScreenHeight()) * 0.5f;
+            lift -= o * o * ui::height() * 0.5f;
             alpha *= 1.0f - o;
         }
     }
@@ -256,7 +257,7 @@ CardPicker::Result CardPicker::update(float dt)
     }
 
     // Survol : on teste la position finale, pour que la zone ne bouge pas avec l'agrandissement.
-    const Vector2 mouse = GetMousePosition();
+    const Vector2 mouse = ui::mouse();
     int hovered = -1;
     for (int i = 0; i < static_cast<int>(slots_.size()); ++i) {
         if (CheckCollisionPointRec(mouse, baseRect(i))) hovered = i;
@@ -315,8 +316,9 @@ void CardPicker::drawCard(int index) const
 
     // Reflet qui traverse les cartes légendaires.
     if (card.rarity == CardRarity::Legendary) {
-        BeginScissorMode(static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.width),
-                         static_cast<int>(r.height));
+        const Rectangle clip = ui::toScreen(r); // le ciseau travaille en pixels réels
+        BeginScissorMode(static_cast<int>(clip.x), static_cast<int>(clip.y), static_cast<int>(clip.width),
+                         static_cast<int>(clip.height));
         const float sweep = std::fmod(time_ * 0.6f + static_cast<float>(index) * 0.3f, 1.6f) - 0.3f;
         const float x = r.x + sweep * r.width;
         DrawRectanglePro({x, r.y + r.height / 2.0f, 34.0f * s, r.height * 1.6f}, {17.0f * s, r.height * 0.8f}, 22.0f,
@@ -383,9 +385,9 @@ void CardPicker::drawCard(int index) const
 
 void CardPicker::draw() const
 {
-    const int w = GetScreenWidth();
+    const int w = ui::screenWidth();
     const float dim = std::min(1.0f, time_ / kDimDuration) * (chosen_ >= 0 ? 1.0f - outro_ / kOutroDuration : 1.0f);
-    DrawRectangle(0, 0, w, GetScreenHeight(), fade(kDim, dim));
+    DrawRectangle(0, 0, w, ui::screenHeight(), fade(kDim, dim));
 
     const float titleAlpha = dim;
     const float top = baseRect(0).y;
@@ -402,7 +404,7 @@ void CardPicker::draw() const
     const float hintY = baseRect(0).y + kCardHeight + 36.0f;
     drawCentered("Clic ou touches 1 / 2 / 3", cx, hintY, 18.0f, fade(kTextDim, titleAlpha));
 
-    const Vector2 m = GetMousePosition();
+    const Vector2 m = ui::mouse();
     DrawCircleV(m, 6.0f, {255, 230, 170, 230});
     DrawCircleLinesV(m, 10.0f, {255, 230, 170, 160});
 }

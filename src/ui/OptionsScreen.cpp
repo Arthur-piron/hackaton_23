@@ -1,6 +1,7 @@
 #include "ui/OptionsScreen.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -39,7 +40,7 @@ void OptionsScreen::open(const Settings& settings)
 
 Rectangle OptionsScreen::rowRect(int index) const
 {
-    const float x = (static_cast<float>(GetScreenWidth()) - kRowWidth) / 2.0f;
+    const float x = (ui::width() - kRowWidth) / 2.0f;
     return {x, kTop + static_cast<float>(index) * (kRowHeight + kRowGap), kRowWidth, kRowHeight};
 }
 
@@ -77,7 +78,7 @@ OptionsScreen::Result OptionsScreen::update(float dt)
     const int previous = selected_;
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) selected_ = (selected_ + kRowCount - 1) % kRowCount;
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) selected_ = (selected_ + 1) % kRowCount;
-    const Vector2 mouse = GetMousePosition();
+    const Vector2 mouse = ui::mouse();
     const Vector2 delta = GetMouseDelta();
     const bool mouseMoved = delta.x != 0.0f || delta.y != 0.0f;
     int direction = 0;
@@ -118,7 +119,7 @@ OptionsScreen::Result OptionsScreen::update(float dt)
 
 void OptionsScreen::draw() const
 {
-    const float w = static_cast<float>(GetScreenWidth());
+    const float w = ui::width();
     drawCentered("OPTIONS", w / 2.0f, 90.0f, 64, kTitle);
     for (int i = 0; i < kRowCount; ++i) {
         const Row row = static_cast<Row>(i);
@@ -146,6 +147,6 @@ void OptionsScreen::draw() const
         }
     }
     drawCentered("Haut / Bas : choisir   Gauche / Droite : régler   Échap : retour",
-                 w / 2.0f, static_cast<float>(GetScreenHeight()) - 60.0f, 16, kTextDim);
-    DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
+                 w / 2.0f, ui::height() - 60.0f, 16, kTextDim);
+    DrawCircleV(ui::mouse(), 5.0f, {255, 230, 170, 200});
 }

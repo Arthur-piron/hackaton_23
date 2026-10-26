@@ -2,6 +2,7 @@
 
 #include "game/Scale.hpp"
 #include "game/World.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -330,7 +331,7 @@ void Structures::drawHealthBars(const Camera3D& camera, Vector3 player) const
 {
     for (const Item& item : items_) {
         if (!item.alive || Vector3Distance(item.center, player) > kBarDistance) continue;
-        const Vector2 at = GetWorldToScreen(Vector3Add(item.center, {0.0f, kBarLift, 0.0f}), camera);
+        const Vector2 at = ui::fromScreen(GetWorldToScreen(Vector3Add(item.center, {0.0f, kBarLift, 0.0f}), camera));
         // Niveau : un losange doré par niveau au-delà du premier.
         for (int l = 1; l < item.level; ++l) {
             const Vector2 pip = {at.x + (static_cast<float>(l) - static_cast<float>(item.level) * 0.5f) * kPipSize * 2.2f,

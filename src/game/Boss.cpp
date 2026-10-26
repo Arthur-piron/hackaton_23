@@ -3,6 +3,7 @@
 #include "core/AssetPath.hpp"
 #include "core/Fonts.hpp"
 #include "game/Scale.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -402,11 +403,11 @@ void Bosses::drawHealthBar(const std::vector<Enemy>& enemies) const
 {
     const Enemy* boss = livingBoss(enemies);
     if (!boss) return;
-    const int x = (GetScreenWidth() - kBarWidth) / 2;
-    const int y = GetScreenHeight() - kBarBottomMargin;
+    const int x = (ui::screenWidth() - kBarWidth) / 2;
+    const int y = ui::screenHeight() - kBarBottomMargin;
     const float fraction = std::clamp(boss->health() / boss->maxHealth(), 0.0f, 1.0f);
     const char* name = boss->stats().name;
-    fonts::drawText(name, (GetScreenWidth() - fonts::measureText(name, kBarNameSize)) / 2, y - kBarNameSize - 6,
+    fonts::drawText(name, (ui::screenWidth() - fonts::measureText(name, kBarNameSize)) / 2, y - kBarNameSize - 6,
                     kBarNameSize, kBarName);
     DrawRectangle(x, y, kBarWidth, kBarHeight, kBarBackground);
     DrawRectangle(x, y, static_cast<int>(kBarWidth * healthTrail_), kBarHeight, kBarTrail);
