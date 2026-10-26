@@ -7,6 +7,7 @@
 #include "game/Weapon.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -309,7 +310,7 @@ void MysteryBox::drawPrompt(const Camera3D& camera, Vector3 player, int gold, co
     if (state_ == State::Leaving || state_ == State::Arriving) return;
     const float distance = Vector2Distance({player.x, player.z}, {position().x, position().z});
     if (distance > kSignDistance) return;
-    const Vector2 screen = GetWorldToScreen(Vector3Add(position(), {0.0f, kSignHeight, 0.0f}), camera);
+    const Vector2 screen = ui::fromScreen(GetWorldToScreen(Vector3Add(position(), {0.0f, kSignHeight, 0.0f}), camera));
     if (distance > kInteractDistance) {
         if (state_ == State::Idle) drawCenteredText("BOÎTE MYSTÈRE", screen, 18, kSignColor);
         return;

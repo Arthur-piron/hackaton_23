@@ -5,6 +5,7 @@
 #include "game/FlowField.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -432,7 +433,7 @@ void WaveManager::drawEliteNames(const Camera3D& camera, Vector3 playerPosition)
         if (!e.isElite() || !e.isAlive()) continue;
         if (Vector3Distance(e.position(), playerPosition) > kEliteNameDistance) continue;
         const Vector3 above = Vector3Add(e.position(), {0.0f, kEliteNameHeight * e.stats().scale, 0.0f});
-        const Vector2 screen = GetWorldToScreen(above, camera);
+        const Vector2 screen = ui::fromScreen(GetWorldToScreen(above, camera));
         const std::string name = eliteName(e.type(), e.elite());
         const int x = static_cast<int>(screen.x) - fonts::measureText(name.c_str(), kEliteNameSize) / 2;
         const int y = static_cast<int>(screen.y);

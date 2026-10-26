@@ -1,6 +1,7 @@
 #include "ui/BuildBar.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 
 #include <cmath>
 
@@ -29,8 +30,8 @@ void drawCentered(const char* text, float cx, float y, int size, Color color)
 void BuildBar::draw(const BuildMode& mode, const Economy& economy) const
 {
     if (!mode.isActive()) return;
-    const float w = static_cast<float>(GetScreenWidth());
-    const float bottom = static_cast<float>(GetScreenHeight()) - kBottomMargin;
+    const float w = ui::width();
+    const float bottom = ui::height() - kBottomMargin;
 
     // Onglets des catégories.
     const int categories = static_cast<int>(BuildCategory::Count);

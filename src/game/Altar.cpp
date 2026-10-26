@@ -2,6 +2,7 @@
 
 #include "core/Fonts.hpp"
 #include "game/Zones.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -65,7 +66,7 @@ void Altar::drawPrompt(const Camera3D& camera, Vector3 player, bool wounded, con
     if (!zones.isOpen(zones.zoneAt(position_))) return;
     const float distance = Vector2Distance({player.x, player.z}, {position_.x, position_.z});
     if (distance > kSignDistance) return;
-    const Vector2 screen = GetWorldToScreen(Vector3Add(position_, {0.0f, kSignHeight, 0.0f}), camera);
+    const Vector2 screen = ui::fromScreen(GetWorldToScreen(Vector3Add(position_, {0.0f, kSignHeight, 0.0f}), camera));
     if (distance > kInteractDistance) {
         if (ready_) drawCenteredText("AUTEL", screen, 18, kSignColor);
         return;

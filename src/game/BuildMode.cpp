@@ -5,6 +5,7 @@
 #include "game/Turrets.hpp"
 #include "game/World.hpp"
 #include "game/Zones.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 #include "rlgl.h"
 
@@ -355,11 +356,11 @@ void BuildMode::drawPrompt(const Camera3D& camera) const
 {
     if (!active_) return;
     if (!upgradeText_.empty()) {
-        const Vector2 at = GetWorldToScreen(Vector3Add(cursor_, {0.0f, 1.2f, 0.0f}), camera);
+        const Vector2 at = ui::fromScreen(GetWorldToScreen(Vector3Add(cursor_, {0.0f, 1.2f, 0.0f}), camera));
         drawCenteredText(upgradeText_.c_str(), at, 18, upgradeOk_ ? kUpgradeColor : kRefusalColor);
     }
     if (items().empty()) return;
-    const Vector2 screen = GetWorldToScreen(Vector3Add(ghost_, {0.0f, 2.2f, 0.0f}), camera);
+    const Vector2 screen = ui::fromScreen(GetWorldToScreen(Vector3Add(ghost_, {0.0f, 2.2f, 0.0f}), camera));
     if (!refusal_.empty()) {
         drawCenteredText(refusal_.c_str(), screen, 20, kRefusalColor);
         return;

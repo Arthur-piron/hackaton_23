@@ -1,6 +1,7 @@
 #include "game/Generator.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -161,7 +162,7 @@ void Generator::drawPrompt(const Camera3D& camera, Vector3 player, const Structu
         const Vector3 c = structures.center(id);
         const float distance = flatDistance(c, player);
         if (distance > kPromptDistance) continue;
-        const Vector2 at = GetWorldToScreen({c.x, kLedHeight + 0.9f, c.z}, camera);
+        const Vector2 at = ui::fromScreen(GetWorldToScreen({c.x, kLedHeight + 0.9f, c.z}, camera));
         const float fuel = structures.turret(id).fuel;
         drawCenteredText(fuel > 0.0f ? TextFormat("Carburant %.1f / %.0f", fuel, kTank) : "Générateur à sec", at, 18,
                          fuel > 0.0f ? kGaugeColor : kEmpty);

@@ -26,6 +26,7 @@ Membres, décisions et questions de fond. **Seul le leader le modifie** (dans se
 | AnimatedModel + gardien animé | `feature/animator` | Arthur (@Arthur-piron) | fusionnée (#10) |
 | Design v2 | `feature/design-v2` | Arthur (@Arthur-piron) | PR ouverte |
 | Combat (armes, zombies, vagues, HUD) | `feature/combat` | Arthur (@Arthur-piron) | en cours |
+| Plein écran natif + interface à l'échelle | `feature/fullscreen-scale` | Arthur (@Arthur-piron) | PR ouverte |
 
 Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`. Le suivi tour par tour se fait dans l'issue.
 
@@ -54,3 +55,4 @@ Statuts : `à faire`, `en cours`, `PR ouverte`, `fusionnée`, `bloquée`. Le sui
 | 2026-10-23 | Arthur | Workflow /loop (`docs/LOOP.md`), design du jeu (`docs/GAME.md`), CODEOWNERS ouvert aux membres. |
 | 2026-10-24 | Arthur | Mode solo de nuit (fusion de ses propres PR jusqu'à 7h, approbations à 0 sur main). Squelette : CMake + raylib 5.5, machine à états, caméra qui suit, joueur ZQSD, mode `--smoke` de test automatique. |
 | 2026-10-24 | Arthur | CI Linux + Windows (#8), assets CC0 (#9), AnimatedModel + gardien animé (#10). Design v2 rédigé dans `docs/GAME.md`. |
+| 2026-10-26 | Arthur | Plein écran à la résolution native (fenêtré sans bordure) et interface mise à l'échelle de l'écran (`src/ui/UiScale`, base 1280 x 720). |

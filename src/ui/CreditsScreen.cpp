@@ -1,6 +1,7 @@
 #include "ui/CreditsScreen.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 #include "raylib.h"
 
 #include <algorithm>
@@ -67,8 +68,8 @@ bool CreditsScreen::update(float dt)
 
 void CreditsScreen::draw() const
 {
-    const float w = static_cast<float>(GetScreenWidth());
-    const float h = static_cast<float>(GetScreenHeight());
+    const float w = ui::width();
+    const float h = ui::height();
     float total = 0.0f;
     for (const Line& line : kLines) total += lineHeight(line);
     // Défile vers le haut puis repart du début quand tout est passé.

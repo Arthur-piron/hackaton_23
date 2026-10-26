@@ -1,6 +1,7 @@
 #include "ui/Hud.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -95,7 +96,7 @@ void Hud::addDamageNumber(Vector3 position, float value, Color color, float scal
 void Hud::draw(const Camera3D& camera, const HudData& data) const
 {
     for (const FloatingText& n : numbers_) {
-        const Vector2 p = GetWorldToScreen(n.position, camera);
+        const Vector2 p = ui::fromScreen(GetWorldToScreen(n.position, camera));
         const float t = n.age / kNumberLifetime;
         const int size = static_cast<int>((22 + 10 * (1.0f - t)) * n.scale);
         Color c = n.color;
@@ -105,8 +106,8 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
     }
 
     if (data.hurtFlash > 0.0f) {
-        const int w = GetScreenWidth();
-        const int h = GetScreenHeight();
+        const int w = ui::screenWidth();
+        const int h = ui::screenHeight();
         const unsigned char a = static_cast<unsigned char>(55 * data.hurtFlash); // le post-traitement ajoute déjà sa teinte
         DrawRectangleGradientV(0, 0, w, h / 4, {160, 0, 0, a}, {160, 0, 0, 0});
         DrawRectangleGradientV(0, h * 3 / 4, w, h / 4, {160, 0, 0, 0}, {160, 0, 0, a});
@@ -127,7 +128,7 @@ void Hud::draw(const Camera3D& camera, const HudData& data) const
 void Hud::drawCards(const HudData& data) const
 {
     // Rangée de pastilles juste au-dessus du panneau de vie, qui remonte d'une ligne si besoin.
-    const int bottom = GetScreenHeight() - kMargin - 58 - 18;
+    const int bottom = ui::screenHeight() - kMargin - 58 - 18;
     for (size_t i = 0; i < data.cards.size(); ++i) {
         const HudCard& card = data.cards[i];
         const int column = static_cast<int>(i) % kCardsPerRow;
@@ -153,7 +154,7 @@ void Hud::drawCards(const HudData& data) const
 void Hud::drawBars(const HudData& data) const
 {
     const int x = kMargin;
-    const int y = GetScreenHeight() - kMargin - 58;
+    const int y = ui::screenHeight() - kMargin - 58;
     const int width = 300;
     DrawRectangleRounded({static_cast<float>(x - 10), static_cast<float>(y - 10), width + 20.0f, 78.0f}, 0.2f, 6, kPanel);
 
@@ -176,8 +177,8 @@ void Hud::drawBars(const HudData& data) const
 
 void Hud::drawAmmo(const HudData& data) const
 {
-    const int w = GetScreenWidth();
-    const int h = GetScreenHeight();
+    const int w = ui::screenWidth();
+    const int h = ui::screenHeight();
     const int x = w - kMargin - 260;
     const int y = h - kMargin - 58;
     DrawRectangleRounded({static_cast<float>(x - 10), static_cast<float>(y - 10), 280.0f, 78.0f}, 0.2f, 6, kPanel);
@@ -199,7 +200,7 @@ void Hud::drawAmmo(const HudData& data) const
 
 void Hud::drawWave(const HudData& data) const
 {
-    const int cx = GetScreenWidth() / 2;
+    const int cx = ui::screenWidth() / 2;
     const char* wave = data.wave > 0 ? TextFormat("VAGUE %d", data.wave) : "PRÉPAREZ-VOUS";
     drawTextShadow(wave, cx - fonts::measureText(wave, 30) / 2, 16, 30, kText);
     const char* info = data.intermission ? TextFormat("prochaine vague dans %d s   (Entrée : maintenant)",
@@ -208,9 +209,9 @@ void Hud::drawWave(const HudData& data) const
     drawTextCentered(info, cx, 52, 18, kDim);
 
     const char* score = TextFormat("%d", data.score);
-    drawTextShadow(score, GetScreenWidth() - kMargin - fonts::measureText(score, 36), 14, 36, kGold);
+    drawTextShadow(score, ui::screenWidth() - kMargin - fonts::measureText(score, 36), 14, 36, kGold);
     const char* kills = TextFormat("%d tués", data.kills);
-    fonts::drawText(kills, GetScreenWidth() - kMargin - fonts::measureText(kills, 18), 54, 18, kDim);
+    fonts::drawText(kills, ui::screenWidth() - kMargin - fonts::measureText(kills, 18), 54, 18, kDim);
 }
 
 void Hud::drawEconomy(const HudData& data) const
@@ -264,7 +265,7 @@ void Hud::drawCombo(const HudData& data) const
 {
     if (data.combo < kComboMinShown) return;
     // Sous le score, aligné à droite : grand multiplicateur qui pulse, compteur et jauge du temps restant.
-    const int right = GetScreenWidth() - kMargin;
+    const int right = ui::screenWidth() - kMargin;
     const int y = 84;
     const int tier = std::clamp(data.comboMultiplier, 1, 5) - 1;
     const Color color = kComboColors[tier];
@@ -294,8 +295,8 @@ void Hud::drawAnnouncement() const
     const float alpha = fadeIn * fadeOut;
     // Léger zoom à l'apparition.
     const int size = static_cast<int>(72 * (1.0f + 0.25f * (1.0f - fadeIn)));
-    const int cx = GetScreenWidth() / 2;
-    const int y = GetScreenHeight() / 3;
+    const int cx = ui::screenWidth() / 2;
+    const int y = ui::screenHeight() / 3;
     Color c = titleColor_;
     c.a = static_cast<unsigned char>(255 * alpha);
     drawTextShadow(title_.c_str(), cx - fonts::measureText(title_.c_str(), size) / 2, y, size, c);
@@ -306,7 +307,7 @@ void Hud::drawAnnouncement() const
 
 void Hud::drawCrosshair() const
 {
-    const Vector2 m = GetMousePosition();
+    const Vector2 m = ui::mouse();
     const Color c = {255, 230, 170, 220};
     DrawCircleLinesV(m, 9.0f, c);
     DrawLineEx({m.x - 16, m.y}, {m.x - 6, m.y}, 2.0f, c);

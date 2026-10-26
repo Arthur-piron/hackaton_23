@@ -1,6 +1,7 @@
 #include "ui/MainMenu.hpp"
 
 #include "core/Fonts.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <cmath>
@@ -45,7 +46,7 @@ void drawRight(const char* text, float right, float y, float size, Color color)
 // Le menu à gauche, le tableau des scores à droite, l'ensemble centré.
 float layoutLeft()
 {
-    return (static_cast<float>(GetScreenWidth()) - (kItemWidth + kColumnGap + kBoardWidth)) / 2.0f;
+    return (ui::width() - (kItemWidth + kColumnGap + kBoardWidth)) / 2.0f;
 }
 }
 
@@ -86,7 +87,7 @@ MainMenu::Result MainMenu::update(float dt, const Progression& progression)
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) selected_ = (selected_ + 1) % kItemCount;
 
     bool clicked = false;
-    const Vector2 mouse = GetMousePosition();
+    const Vector2 mouse = ui::mouse();
     for (int i = 0; i < kItemCount; ++i) {
         if (!CheckCollisionPointRec(mouse, itemRect(i))) continue;
         if (Vector2Length(GetMouseDelta()) > 0.0f) selected_ = i;
@@ -148,8 +149,8 @@ MainMenu::Result MainMenu::update(float dt, const Progression& progression)
 
 void MainMenu::draw(const Progression& progression) const
 {
-    const float w = static_cast<float>(GetScreenWidth());
-    const float h = static_cast<float>(GetScreenHeight());
+    const float w = ui::width();
+    const float h = ui::height();
     drawCentered("LAST LIGHT", w / 2.0f, 60.0f, 96.0f, kTitle);
     drawCentered("Les morts craignent la lumière. Tiens jusqu'à l'aube.", w / 2.0f, 170.0f, 22.0f, kTagline);
 
@@ -222,5 +223,5 @@ void MainMenu::draw(const Progression& progression) const
     const char* fight = "Clic : tirer   Clic droit : lampe   R : recharger   1-4 / molette : armes";
     drawCentered(move, w / 2.0f, h - 66.0f, 15.0f, kTextDim);
     drawCentered(fight, w / 2.0f, h - 42.0f, 15.0f, kTextDim);
-    DrawCircleV(GetMousePosition(), 5.0f, {255, 230, 170, 200});
+    DrawCircleV(ui::mouse(), 5.0f, {255, 230, 170, 200});
 }

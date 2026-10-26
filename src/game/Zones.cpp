@@ -4,6 +4,7 @@
 #include "game/Economy.hpp"
 #include "game/Scale.hpp"
 #include "game/World.hpp"
+#include "ui/UiScale.hpp"
 #include "raymath.h"
 
 #include <algorithm>
@@ -281,10 +282,10 @@ void Zones::drawPrompt(const Camera3D& camera, Vector3 player, int gold) const
         const Gate& gate = gates_[i];
         if (gate.open || Vector3Distance(gate.center, player) > kSignDistance) continue;
         const ZoneDef& zone = zones_[static_cast<size_t>(gate.zone)].def;
-        const Vector2 screen = GetWorldToScreen(Vector3Add(gate.center, {0.0f, kGateHeight + 0.4f, 0.0f}), camera);
+        const Vector2 screen = ui::fromScreen(GetWorldToScreen(Vector3Add(gate.center, {0.0f, kGateHeight + 0.4f, 0.0f}), camera));
         if (static_cast<int>(i) != nearest) {
-            const bool onScreen = screen.y > kSignTopMargin && screen.y < GetScreenHeight() - kSignEdgeMargin &&
-                                  screen.x > kSignEdgeMargin && screen.x < GetScreenWidth() - kSignEdgeMargin;
+            const bool onScreen = screen.y > kSignTopMargin && screen.y < ui::height() - kSignEdgeMargin &&
+                                  screen.x > kSignEdgeMargin && screen.x < ui::width() - kSignEdgeMargin;
             if (onScreen) {
                 drawCenteredText(TextFormat("%s - %d", zone.name.c_str(), zone.price), screen, 18, kSignColor);
             }
